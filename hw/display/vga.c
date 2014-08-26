@@ -780,6 +780,41 @@ void vbe_ioport_write_data(void *opaque, uint32_t addr, uint32_t val)
             s->vbe_regs[s->vbe_index] = val;
             vga_update_memory_access(s);
             break;
+        case VBE_DISPI_INDEX_VIRT_WIDTH:
+            {
+                int w, h, line_offset;
+
+                if (val < s->vbe_regs[VBE_DISPI_INDEX_XRES])
+                    return;
+                w = val;
+                if (s->vbe_regs[VBE_DISPI_INDEX_BPP] == 4)
+                    line_offset = w >> 1;
+                else
+                    line_offset = w * ((s->vbe_regs[VBE_DISPI_INDEX_BPP] + 7) >> 3);
+                h = s->vbe_size / line_offset;
+                /* XXX: support weird bochs semantics ? */
+                if (h < s->vbe_regs[VBE_DISPI_INDEX_YRES])
+                    return;
+                s->vbe_regs[VBE_DISPI_INDEX_VIRT_WIDTH] = w;
+                s->vbe_regs[VBE_DISPI_INDEX_VIRT_HEIGHT] = h;
+                s->vbe_line_offset = line_offset;
+            }
+            break;
+        case VBE_DISPI_INDEX_X_OFFSET:
+        case VBE_DISPI_INDEX_Y_OFFSET:
+            {
+                int x;
+                s->vbe_regs[s->vbe_index] = val;
+                s->vbe_start_addr = s->vbe_line_offset * s->vbe_regs[VBE_DISPI_INDEX_Y_OFFSET];
+                x = s->vbe_regs[VBE_DISPI_INDEX_X_OFFSET];
+                if (s->vbe_regs[VBE_DISPI_INDEX_BPP] == 4)
+                    s->vbe_start_addr += x >> 1;
+                else
+                    s->vbe_start_addr += x * ((s->vbe_regs[VBE_DISPI_INDEX_BPP] + 7) >> 3);
+                s->vbe_start_addr >>= 2;
+            }
+            break;
+>>>>>>> vbe: make bochs dispi interface return the correct memory size with qxl
         default:
             break;
         }
