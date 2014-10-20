@@ -28,6 +28,11 @@
 #include <errno.h>
 #include <sys/time.h>
 
+#include "qsim-vm.h"
+#include "vm-func.h"
+
+#include "qsim-context.h"
+
 #include "config-host.h"
 
 #ifdef CONFIG_SECCOMP
@@ -249,6 +254,20 @@ static struct {
     { .driver = "vmware-svga",          .flag = &default_vga       },
     { .driver = "qxl-vga",              .flag = &default_vga       },
 };
+
+int qsim_vm_id, qsim_cur_cpu, qsim_id, qsim_memop_flag = 0;
+
+inst_cb_t	qsim_inst_cb	= NULL;
+
+uint64_t	qsim_host_addr;
+uint64_t	qsim_phys_addr;
+
+qsim_ucontext_t main_context;
+qsim_ucontext_t qemu_context;
+
+qemu_ramdesc_t *qsim_ram;
+
+void set_inst_cb	(inst_cb_t	cb) { qsim_inst_cb = cb; }
 
 static QemuOptsList qemu_rtc_opts = {
     .name = "rtc",
