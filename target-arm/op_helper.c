@@ -24,6 +24,25 @@
 #define SIGNBIT (uint32_t)0x80000000
 #define SIGNBIT64 ((uint64_t)1 << 63)
 
+/*
+#include "qsim-vm.h"
+#include "vm-func.h"
+
+#include "qsim-context.h"
+
+
+extern qsim_ucontext_t qemu_context;
+extern qsim_ucontext_t main_context;
+
+extern int qsim_memop_flag;
+extern uint64_t qsim_phys_addr;
+extern uint64_t qsim_host_addr;
+
+extern int qsim_id;
+*/
+uint64_t qsim_eip;
+extern inst_cb_t	qsim_inst_cb;
+
 static void raise_exception(CPUARMState *env, int tt)
 {
     ARMCPU *cpu = arm_env_get_cpu(env);
@@ -837,4 +856,21 @@ uint32_t HELPER(ror_cc)(CPUARMState *env, uint32_t x, uint32_t i)
         env->CF = (x >> (shift - 1)) & 1;
         return ((uint32_t)x >> shift) | (x << (32 - shift));
     }
+}
+
+uint32_t HELPER(inst_callback)(CPUARMState *env, uint32_t vaddr, uint32_t length, uint32_t type)
+{
+	qsim_eip = vaddr;
+	if (qsim_inst_cb != NULL) {
+		qsim_memop_flag = 0;
+		cpu_ldub_code(env, vaddr);
+		qsim_memop_flag = 1;
+
+		// get physical addr
+		qsim_phys_addr = qsim_ram_addr_from_host((void *)qsim_host_addr);
+		qsim_inst_cb(qsim_id, vaddr, qsim_phys_addr, length, 
+					(uint8_t *)qsim_host_addr, type);
+	}
+
+	return 0;
 }

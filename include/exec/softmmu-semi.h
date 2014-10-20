@@ -9,6 +9,7 @@
 #ifndef SOFTMMU_SEMI_H
 #define SOFTMMU_SEMI_H 1
 
+
 static inline uint32_t softmmu_tget32(CPUArchState *env, uint32_t addr)
 {
     uint32_t val;
