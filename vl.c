@@ -257,17 +257,41 @@ static struct {
 
 int qsim_vm_id, qsim_cur_cpu, qsim_id, qsim_memop_flag = 0;
 
-inst_cb_t	qsim_inst_cb	= NULL;
+static void qsim_loop_main(void);
+static int  qsim_qemu_main(int argc, const char **argv, char **envp);
+
+atomic_cb_t qsim_atomic_cb = NULL;
+magic_cb_t  qsim_magic_cb  = NULL;
+int_cb_t    qsim_int_cb    = NULL;
+mem_cb_t    qsim_mem_cb    = NULL;
+inst_cb_t   qsim_inst_cb   = NULL;
+io_cb_t     qsim_io_cb     = NULL;
+reg_cb_t    qsim_reg_cb    = NULL;
+trans_cb_t  qsim_trans_cb  = NULL;
 
 uint64_t	qsim_host_addr;
 uint64_t	qsim_phys_addr;
+
+uint64_t    qsim_icount;
 
 qsim_ucontext_t main_context;
 qsim_ucontext_t qemu_context;
 
 qemu_ramdesc_t *qsim_ram;
 
-void set_inst_cb	(inst_cb_t	cb) { qsim_inst_cb = cb; }
+int qsim_qemu_is_slave;
+void *qemu_stack;
+
+const size_t QEMU_STACK_SIZE = 8*(1<<20);
+
+void set_atomic_cb(atomic_cb_t cb) { qsim_atomic_cb = cb; }
+void set_mem_cb   (mem_cb_t    cb) { qsim_mem_cb    = cb; }
+void set_inst_cb  (inst_cb_t   cb) { qsim_inst_cb   = cb; }
+void set_int_cb   (int_cb_t    cb) { qsim_int_cb    = cb; }
+void set_magic_cb (magic_cb_t  cb) { qsim_magic_cb  = cb; }
+void set_io_cb    (io_cb_t     cb) { qsim_io_cb     = cb; }
+void set_reg_cb   (reg_cb_t    cb) { qsim_reg_cb    = cb; }
+void set_trans_cb (trans_cb_t  cb) { qsim_trans_cb  = cb; }
 
 static QemuOptsList qemu_rtc_opts = {
     .name = "rtc",
@@ -2014,7 +2038,16 @@ static bool main_loop_should_exit(void)
     return false;
 }
 
-static void main_loop(void)
+uint64_t run(uint64_t insts)
+{
+	qsim_icount = insts;
+
+	swapcontext(&main_context, &qemu_context);
+
+	return insts - qsim_icount;
+}
+
+static void qsim_loop_main(void)
 {
     bool nonblocking;
     int last_io = 0;
@@ -2777,12 +2810,12 @@ static void qemu_run_machine_init_done_notifiers(void)
     notifier_list_notify(&machine_init_done_notifiers, NULL);
 }
 
-static const QEMUOption *lookup_opt(int argc, char **argv,
+static const QEMUOption *lookup_opt(int argc, const char **argv,
                                     const char **poptarg, int *poptind)
 {
     const QEMUOption *popt;
     int optind = *poptind;
-    char *r = argv[optind];
+    const char *r = argv[optind];
     const char *optarg;
 
     loc_set_cmdline(argv, optind, 1);
@@ -2923,7 +2956,75 @@ out:
     return 0;
 }
 
-int main(int argc, char **argv, char **envp)
+int interrupt(uint8_t vec) {
+  int rvec = 0;
+
+  /*
+  pthread_mutex_lock(&qsim_irq_lock);
+  if (qsim_irq_pending == 1  && qsim_irq_vec < vec) {
+    rvec = qsim_irq_vec;
+    qsim_irq_vec = vec;
+  } else if (qsim_irq_pending == 0) {
+    rvec = -1;
+    qsim_irq_vec = vec;
+    qsim_irq_pending = 1;
+  } else {
+    rvec = vec;
+  }
+
+  // Re-notify the CPU no matter what.
+  cpu_interrupt(first_cpu, CPU_INTERRUPT_HARD);
+  //qemu_notify_event();
+  pthread_mutex_unlock(&qsim_irq_lock);
+
+  // Give the caller the vector number of an interrupt that _won't_ be
+  // processed and needs to be queued if it is to be handled, or -1.
+  */
+  return rvec;
+}
+
+void qemu_init(qemu_ramdesc_t *ram, 
+               const char* ram_size,
+               int cpu_id)
+{
+    // Assemble argv based on given arguments.
+	/*
+    const char *argv[] = {
+      "qemu", "-L", "qemu-0.12.3/pc-bios", "-no-hpet",
+      "-monitor", "/dev/null", "-nographic", "-serial", "/dev/null", 
+      "-no-acpi", "-no-hpet", "-m", ram_size, NULL
+    }; */
+	const char *argv[] = {
+		"qemu", "-L", "-monitor", "/dev/null", "-nographic", "-serial",
+		"/dev/null", "-m", ram_size, "-M", "vexpress-a9", NULL
+	};
+    int argc; 
+    for (argc = 0; argv[argc] != NULL; argc++);
+
+    // Set qsim-specific variables.
+    qsim_cur_cpu       = cpu_id & 0xffff;
+    qsim_id            = cpu_id;
+    qsim_ram           = ram;
+    qsim_qemu_is_slave = (ram != NULL);
+
+     // Call main with newly assembled argv.
+    qsim_qemu_main(argc, argv, (char**)environ);
+
+    // Initialize contexts.
+    getcontext(&qemu_context);
+    getcontext(&main_context);
+    
+    // Create qemu stack.
+    qemu_stack = g_malloc0(QEMU_STACK_SIZE);
+ 
+    // Set up the qemu context.
+    qemu_context.uc_stack.ss_sp = qemu_stack;
+    qemu_context.uc_stack.ss_size = QEMU_STACK_SIZE;
+    qemu_context.uc_link = &main_context;
+    makecontext(&qemu_context, qsim_loop_main, 0);
+}
+
+int qsim_qemu_main(int argc, const char **argv, char **envp)
 {
     int i;
     int snapshot, linux_boot;
@@ -4557,9 +4658,9 @@ int main(int argc, char **argv, char **envp)
         }
     }
 
-    main_loop();
+    //main_loop();
     bdrv_close_all();
-    pause_all_vcpus();
+    //pause_all_vcpus();
     res_free();
 #ifdef CONFIG_TPM
     tpm_cleanup();
