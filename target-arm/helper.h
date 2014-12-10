@@ -530,15 +530,12 @@ DEF_HELPER_FLAGS_2(neon_pmull_64_lo, TCG_CALL_NO_RWG_SE, i64, i64, i64)
 DEF_HELPER_FLAGS_2(neon_pmull_64_hi, TCG_CALL_NO_RWG_SE, i64, i64, i64)
 
 DEF_HELPER_4(inst_callback, i32, env, i32, i32, i32)
-	/*
-DEF_HELPER_2(reg_read_callback, i32, i32, i32)
-DEF_HELPER_2(reg_write_callback, i32, i32, i32)
-DEF_HELPER_2(load_callback_pre, i32, i32, i32)
-DEF_HELPER_2(load_callback_post, i32, i32, i32)
-DEF_HELPER_3(store_callback_pre, i32, i32, i32, i32)
-DEF_HELPER_3(store_callback_post, i32, i32, i32, i32)
-*/
-
+DEF_HELPER_4(reg_read_callback, i32, env, i32, i32, i32)
+DEF_HELPER_4(reg_write_callback, i32, env, i32, i32, i32)
+DEF_HELPER_4(load_callback_pre, i32, env, i32, i32, i32)
+DEF_HELPER_4(load_callback_post, i32, env, i32, i32, i32)
+DEF_HELPER_4(store_callback_pre, i32, env, i32, i32, i32)
+DEF_HELPER_4(store_callback_post, i32, env, i32, i32, i32)
 
 #ifdef TARGET_AARCH64
 #include "helper-a64.h"

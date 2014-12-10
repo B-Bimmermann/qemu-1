@@ -140,7 +140,7 @@ do_libtool() {
 }
 
 libtool_prog() {
-    do_libtool --mode=compile $QEMU_CFLAGS -c -fPIE -DPIE -o $TMPO $TMPC || return $?
+    do_libtool --mode=compile $QEMU_CFLAGS -c -o $TMPO $TMPC || return $?
     do_libtool --mode=link $LDFLAGS -o $TMPA $TMPL -rpath /usr/local/lib
 }
 

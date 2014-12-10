@@ -42,6 +42,7 @@ extern int qsim_id;
 */
 uint64_t qsim_eip;
 extern inst_cb_t	qsim_inst_cb;
+//extern mem_cb_t		qsim_mem_cb;
 
 static void raise_exception(CPUARMState *env, int tt)
 {
@@ -873,4 +874,82 @@ uint32_t HELPER(inst_callback)(CPUARMState *env, uint32_t vaddr, uint32_t length
 	}
 
 	return 0;
+}
+
+static void memop_callback(uint32_t addr, uint32_t size, int type)
+{
+}
+
+uint32_t HELPER(store_callback_pre)(CPUARMState *env, uint32_t vaddr, uint32_t length, uint32_t type)
+{
+	memop_callback(vaddr, length, type);
+	return 0;
+}
+
+uint32_t HELPER(store_callback_post)(CPUARMState *env, uint32_t vaddr, uint32_t length, uint32_t type)
+{
+	memop_callback(vaddr, length, type);
+	return 0;
+}
+
+uint32_t HELPER(load_callback_pre)(CPUARMState *env, uint32_t vaddr, uint32_t length, uint32_t type)
+{
+	memop_callback(vaddr, length, type);
+	return 0;
+}
+
+uint32_t HELPER(load_callback_post)(CPUARMState *env, uint32_t vaddr, uint32_t length, uint32_t type)
+{
+	memop_callback(vaddr, length, type);
+	return 0;
+}
+
+uint32_t HELPER(reg_read_callback)(CPUARMState *env, uint32_t vaddr, uint32_t length, uint32_t type)
+{
+	memop_callback(vaddr, length, type);
+	return 0;
+}
+
+uint32_t HELPER(reg_write_callback)(CPUARMState *env, uint32_t vaddr, uint32_t length, uint32_t type)
+{
+	memop_callback(vaddr, length, type);
+	return 0;
+}
+
+uint64_t get_reg(enum regs r);
+void     set_reg(enum regs r, uint64_t val);
+uint8_t mem_rd(uint64_t paddr);
+void mem_wr(uint64_t paddr, uint8_t val);
+uint8_t mem_rd_virt(uint64_t vaddr);
+void mem_wr_virt(uint64_t vaddr, uint8_t val);
+
+uint64_t get_reg(enum regs r)
+{
+	//set_reg(r, 0);
+	return 0;
+}
+
+void set_reg(enum regs r, uint64_t val)
+{
+	get_reg(r);
+}
+
+uint8_t mem_rd(uint64_t paddr)
+{
+	return 0;
+}
+
+void mem_wr(uint64_t paddr, uint8_t val)
+{
+	return;
+}
+
+uint8_t mem_rd_virt(uint64_t vaddr)
+{
+	return 0;
+}
+
+void mem_wr_virt(uint64_t vaddr, uint8_t val)
+{
+	return;
 }
