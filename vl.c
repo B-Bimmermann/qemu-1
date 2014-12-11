@@ -2064,6 +2064,7 @@ static void qsim_loop_main(void)
         dev_time += profile_getclock() - ti;
 #endif
     } while (!main_loop_should_exit());
+	pause_all_vcpus();
 }
 
 static void version(void)
@@ -2991,12 +2992,17 @@ void qemu_init(qemu_ramdesc_t *ram,
 	/*
     const char *argv[] = {
       "qemu", "-L", "qemu-0.12.3/pc-bios", "-no-hpet",
-      "-monitor", "/dev/null", "-nographic", "-serial", "/dev/null", 
+      "-monitor", "/dev/null", "-nographic", "-serial", "/dev/null",
       "-no-acpi", "-no-hpet", "-m", ram_size, NULL
     }; */
 	const char *argv[] = {
-		"qemu", "-L", "-monitor", "/dev/null", "-nographic", "-serial",
-		"/dev/null", "-m", ram_size, "-M", "vexpress-a9", NULL
+		"qemu", "-monitor", "/dev/null",
+		"-m", ram_size, "-M", "vexpress-a9",
+		"-kernel", "/home/pranith/devops/code/arm_images/after-copy/vmlinuz-3.2.0-4-vexpress",
+		"-initrd", "/home/pranith/devops/code/arm_images/after-copy/initrd.img-3.2.0-4-vexpress",
+		"-sd", "/home/pranith/devops/code/arm_images/armdisk.img",
+		"-append", "root=/dev/mmcblk0p2 rootdelay=1000",
+		NULL
 	};
     int argc; 
     for (argc = 0; argv[argc] != NULL; argc++);
@@ -3022,6 +3028,7 @@ void qemu_init(qemu_ramdesc_t *ram,
     qemu_context.uc_stack.ss_size = QEMU_STACK_SIZE;
     qemu_context.uc_link = &main_context;
     makecontext(&qemu_context, qsim_loop_main, 0);
+	swapcontext(&main_context, &qemu_context);
 }
 
 int qsim_qemu_main(int argc, const char **argv, char **envp)
