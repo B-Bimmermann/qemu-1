@@ -1,6 +1,7 @@
 #ifndef QSIM_CONTEXT_H
 #define QSIM_CONTEXT_H
 
+#if 0
 #if defined(__linux__) && (defined(__i386__) || defined(__x86_64__))
 typedef struct {
   struct {
@@ -37,7 +38,7 @@ static __attribute__((unused)) void swapcontext(qsim_ucontext_t *from, qsim_ucon
       "pop %%ebp;"
       "leave;"
       "ret;" :: "a"(&(from->uc_stack.ss_sp)), "c"(&(to->uc_stack.ss_sp)));
-#else
+#elif __x86_64__
   asm("push %%rdi;"        // Save 'from' registers
       "push %%rbp;"
       "push %%rbx;"
@@ -82,7 +83,7 @@ static __attribute__((unused)) void makecontext(qsim_ucontext_t *p, void (*f)(vo
   stack[3] = (void*)((char*)p->uc_stack.ss_sp + sizeof(void*)*4);
   p->uc_stack.ss_sp = (uint8_t*)stack - 6;
   asm("stmxcsr (%%eax); fstcw 4(%%eax);" :: "a"(p->uc_stack.ss_sp));
-#else
+#elif __x86_64__
   stack[7] = (void*)f;           // One of these, depending on whether the
   stack[8] = (void*)f;           // base pointer is saved.
   stack[5] = (void*)((char*)p->uc_stack.ss_sp + sizeof(void*)*7); // Init. bp
@@ -93,9 +94,10 @@ static __attribute__((unused)) void makecontext(qsim_ucontext_t *p, void (*f)(vo
 
 static __attribute__((unused)) void getcontext(qsim_ucontext_t *p) {}
 
-#else
+#endif
+#endif
 #include <ucontext.h>
 typedef ucontext_t qsim_ucontext_t;
-#endif
 
 #endif
+
