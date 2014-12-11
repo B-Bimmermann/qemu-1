@@ -4666,7 +4666,7 @@ int qsim_qemu_main(int argc, const char **argv, char **envp)
     }
 
     //main_loop();
-    bdrv_close_all();
+    //bdrv_close_all();
     //pause_all_vcpus();
     res_free();
 #ifdef CONFIG_TPM
