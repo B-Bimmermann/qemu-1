@@ -2827,7 +2827,7 @@ void qemu_init(qemu_ramdesc_t *ram,
 		"-kernel", "/home/pranith/devops/code/arm_images/after-copy/vmlinuz-3.2.0-4-vexpress",
 		"-initrd", "/home/pranith/devops/code/arm_images/after-copy/initrd.img-3.2.0-4-vexpress",
 		"-sd", "/home/pranith/devops/code/arm_images/armdisk.img",
-		"-append", "root=/dev/mmcblk0p2 rootdelay=1000",
+		"-append", "root=/dev/mmcblk0p2",
 		NULL
 	};
     int argc; 
