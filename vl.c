@@ -258,7 +258,7 @@ trans_cb_t  qsim_trans_cb  = NULL;
 uint64_t	qsim_host_addr;
 uint64_t	qsim_phys_addr;
 
-uint64_t    qsim_icount;
+uint64_t    qsim_icount = 10000;
 
 qsim_ucontext_t main_context;
 qsim_ucontext_t qemu_context;
@@ -2854,7 +2854,7 @@ void qemu_init(qemu_ramdesc_t *ram,
     qemu_context.uc_stack.ss_size = QEMU_STACK_SIZE;
     qemu_context.uc_link = &main_context;
     makecontext(&qemu_context, qsim_loop_main, 0);
-	swapcontext(&main_context, &qemu_context);
+    //swapcontext(&main_context, &qemu_context);
 }
 
 int qsim_qemu_main(int argc, const char **argv, char **envp)

@@ -40,6 +40,7 @@ extern uint64_t qsim_host_addr;
 
 extern int qsim_id;
 */
+extern uint64_t qsim_icount;
 uint64_t qsim_eip;
 extern inst_cb_t	qsim_inst_cb;
 //extern mem_cb_t		qsim_mem_cb;
@@ -859,61 +860,80 @@ uint32_t HELPER(ror_cc)(CPUARMState *env, uint32_t x, uint32_t i)
     }
 }
 
-uint32_t HELPER(inst_callback)(CPUARMState *env, uint32_t vaddr, uint32_t length, uint32_t type)
+void HELPER(inst_callback)(uint32_t vaddr, uint32_t length, uint32_t type)
 {
-	qsim_eip = vaddr;
-	if (qsim_inst_cb != NULL) {
+	static bool once = false;
+
+	if (once)
+		return;
+
+	if (qsim_inst_cb != NULL && !once) {
 		qsim_memop_flag = 0;
-		cpu_ldub_code(env, vaddr);
-		qsim_memop_flag = 1;
 
 		// get physical addr
-		qsim_phys_addr = qsim_ram_addr_from_host((void *)qsim_host_addr);
+		/*
 		qsim_inst_cb(qsim_id, vaddr, qsim_phys_addr, length, 
 					(uint8_t *)qsim_host_addr, type);
+					*/
+		qsim_inst_cb(qsim_id, vaddr, 0, length, 0, type);
+		once = true;
+
+		qsim_memop_flag = 1;
 	}
 
-	return 0;
+	qsim_icount--;
+	if (qsim_icount == 0) {
+		swapcontext(&qemu_context, &main_context);
+	}
+
+	return;
 }
 
 static void memop_callback(uint32_t addr, uint32_t size, int type)
 {
+	static bool once = false;
+
+	if (once)
+		return;
+
+	qsim_mem_cb(qsim_id, addr, 0, size, type);
+	once = true;
 }
 
-uint32_t HELPER(store_callback_pre)(CPUARMState *env, uint32_t vaddr, uint32_t length, uint32_t type)
+void HELPER(store_callback_pre)(uint32_t vaddr, uint32_t length, uint32_t type)
 {
 	memop_callback(vaddr, length, type);
-	return 0;
+	return;
 }
 
-uint32_t HELPER(store_callback_post)(CPUARMState *env, uint32_t vaddr, uint32_t length, uint32_t type)
+void HELPER(store_callback_post)(uint32_t vaddr, uint32_t length, uint32_t type)
 {
 	memop_callback(vaddr, length, type);
-	return 0;
+	return;
 }
 
-uint32_t HELPER(load_callback_pre)(CPUARMState *env, uint32_t vaddr, uint32_t length, uint32_t type)
+void HELPER(load_callback_pre)(uint32_t vaddr, uint32_t length, uint32_t type)
 {
 	memop_callback(vaddr, length, type);
-	return 0;
+	return;
 }
 
-uint32_t HELPER(load_callback_post)(CPUARMState *env, uint32_t vaddr, uint32_t length, uint32_t type)
+void HELPER(load_callback_post)(uint32_t vaddr, uint32_t length, uint32_t type)
 {
 	memop_callback(vaddr, length, type);
-	return 0;
+	return;
 }
 
-uint32_t HELPER(reg_read_callback)(CPUARMState *env, uint32_t vaddr, uint32_t length, uint32_t type)
+void HELPER(reg_read_callback)(CPUARMState *env, uint32_t vaddr, uint32_t length, uint32_t type)
 {
 	memop_callback(vaddr, length, type);
-	return 0;
+	return;
 }
 
-uint32_t HELPER(reg_write_callback)(CPUARMState *env, uint32_t vaddr, uint32_t length, uint32_t type)
+void HELPER(reg_write_callback)(CPUARMState *env, uint32_t vaddr, uint32_t length, uint32_t type)
 {
 	memop_callback(vaddr, length, type);
-	return 0;
+	return;
 }
 
 uint64_t get_reg(enum regs r);
