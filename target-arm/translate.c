@@ -10620,60 +10620,59 @@ static void disas_thumb_insn(CPUARMState *env, DisasContext *s)
             tmp = tcg_temp_new_i32();
         }
 
-		tmp_addr = tcg_const_i32(addr);
         switch (op) {
         case 0: /* str */
-			tmp_size = tcg_const_i32(4);
-			tmp_type = tcg_const_i32(0);
-			gen_helper_store_callback_pre(tmp_addr, tmp_size, tmp_type);
+            tmp_size = tcg_const_i32(4);
+            tmp_type = tcg_const_i32(0);
+            gen_helper_store_callback_pre(tmp_addr, tmp_size, tmp_type);
             gen_aa32_st32(tmp, addr, get_mem_index(s));
             break;
         case 1: /* strh */
-			tmp_size = tcg_const_i32(2);
-			tmp_type = tcg_const_i32(0);
-			gen_helper_store_callback_pre(tmp_addr, tmp_size, tmp_type);
+            tmp_size = tcg_const_i32(2);
+            tmp_type = tcg_const_i32(0);
+            gen_helper_store_callback_pre(tmp_addr, tmp_size, tmp_type);
             gen_aa32_st16(tmp, addr, get_mem_index(s));
             break;
         case 2: /* strb */
-			tmp_size = tcg_const_i32(1);
-			tmp_type = tcg_const_i32(0);
-			gen_helper_store_callback_pre(tmp_addr, tmp_size, tmp_type);
+            tmp_size = tcg_const_i32(1);
+            tmp_type = tcg_const_i32(0);
+            gen_helper_store_callback_pre(tmp_addr, tmp_size, tmp_type);
             gen_aa32_st8(tmp, addr, get_mem_index(s));
             break;
         case 3: /* ldrsb */
-			tmp_size = tcg_const_i32(1);
-			tmp_type = tcg_const_i32(1);
-			gen_helper_load_callback_pre(tmp_addr, tmp_size, tmp_type);
+            tmp_size = tcg_const_i32(1);
+            tmp_type = tcg_const_i32(1);
+            gen_helper_load_callback_pre(tmp_addr, tmp_size, tmp_type);
             gen_aa32_ld8s(tmp, addr, get_mem_index(s));
             break;
         case 4: /* ldr */
-			tmp_size = tcg_const_i32(4);
-			tmp_type = tcg_const_i32(1);
-			gen_helper_load_callback_pre(tmp_addr, tmp_size, tmp_type);
+            tmp_size = tcg_const_i32(4);
+            tmp_type = tcg_const_i32(1);
+            gen_helper_load_callback_pre(tmp_addr, tmp_size, tmp_type);
             gen_aa32_ld32u(tmp, addr, get_mem_index(s));
             break;
         case 5: /* ldrh */
-			tmp_size = tcg_const_i32(2);
-			tmp_type = tcg_const_i32(1);
-			gen_helper_load_callback_pre(tmp_addr, tmp_size, tmp_type);
+            tmp_size = tcg_const_i32(2);
+            tmp_type = tcg_const_i32(1);
+            gen_helper_load_callback_pre(tmp_addr, tmp_size, tmp_type);
             gen_aa32_ld16u(tmp, addr, get_mem_index(s));
             break;
         case 6: /* ldrb */
-			tmp_size = tcg_const_i32(1);
-			tmp_type = tcg_const_i32(1);
-			gen_helper_load_callback_pre(tmp_addr, tmp_size, tmp_type);
+            tmp_size = tcg_const_i32(1);
+            tmp_type = tcg_const_i32(1);
+            gen_helper_load_callback_pre(tmp_addr, tmp_size, tmp_type);
             gen_aa32_ld8u(tmp, addr, get_mem_index(s));
             break;
         case 7: /* ldrsh */
-			tmp_size = tcg_const_i32(2);
-			tmp_type = tcg_const_i32(1);
-			gen_helper_load_callback_pre(tmp_addr, tmp_size, tmp_type);
+            tmp_size = tcg_const_i32(2);
+            tmp_type = tcg_const_i32(1);
+            gen_helper_load_callback_pre(tmp_addr, tmp_size, tmp_type);
             gen_aa32_ld16s(tmp, addr, get_mem_index(s));
             break;
         }
-		tcg_temp_free_i32(tmp_addr);
-		tcg_temp_free_i32(tmp_type);
-		tcg_temp_free_i32(tmp_size);
+        //tcg_temp_free_i32(tmp_addr);
+        tcg_temp_free_i32(tmp_type);
+        tcg_temp_free_i32(tmp_size);
         if (op >= 3) { /* load */
             store_reg(s, rd, tmp);
         } else {
