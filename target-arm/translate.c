@@ -828,6 +828,10 @@ static inline void store_reg_from_load(CPUARMState *env, DisasContext *s,
     }
 }
 
+/* Convert suffix to string */
+#define STRING(x) STR_HELPER(x)
+#define STR_HELPER(x) #x
+
 /* Abstractions of "generate code to do a guest load/store for
  * AArch32", where a vaddr is always 32 bits (and is zero
  * extended if we're a 64 bit core) and  data is also
@@ -837,30 +841,88 @@ static inline void store_reg_from_load(CPUARMState *env, DisasContext *s,
  */
 #if TARGET_LONG_BITS == 32
 
-#define DO_GEN_LD(SUFF, OPC)                                             \
-static inline void gen_aa32_ld##SUFF(TCGv_i32 val, TCGv_i32 addr, int index) \
-{                                                                        \
-    tcg_gen_qemu_ld_i32(val, addr, index, OPC);                          \
+// TODO: generate callbacks for 64-bit
+#define DO_GEN_LD(SUFF, OPC)                                                \
+static inline void gen_aa32_ld##SUFF(TCGv_i32 val, TCGv_i32 addr, int index)\
+{                                                                           \
+    TCGv tmp_size, tmp_type;                                                \
+    int size;                                                               \
+                                                                            \
+    if (!(strcmp(STRING(SUFF), "8u") && strcmp(STRING(SUFF), "8s")))        \
+        size = 1;                                                           \
+    else if (!(strcmp(STRING(SUFF), "16u") && strcmp(STRING(SUFF), "16s"))) \
+        size = 2;                                                           \
+    else if (!(strcmp(STRING(SUFF), "32u") && strcmp(STRING(SUFF), "32s"))) \
+        size = 4;                                                           \
+                                                                            \
+    tmp_size = tcg_const_i32(size);                                         \
+    tmp_type = tcg_const_i32(1);                                            \
+    gen_helper_load_callback_pre(addr, tmp_size, tmp_type);                 \
+    tcg_gen_qemu_ld_i32(val, addr, index, OPC);                             \
+    gen_helper_load_callback_post(addr, tmp_size, tmp_type);                \
+    tcg_temp_free_i32(tmp_size);                                            \
+    tcg_temp_free_i32(tmp_type);                                            \
 }
 
-#define DO_GEN_ST(SUFF, OPC)                                             \
-static inline void gen_aa32_st##SUFF(TCGv_i32 val, TCGv_i32 addr, int index) \
-{                                                                        \
-    tcg_gen_qemu_st_i32(val, addr, index, OPC);                          \
+#define DO_GEN_ST(SUFF, OPC)                                                \
+static inline void gen_aa32_st##SUFF(TCGv_i32 val, TCGv_i32 addr, int index)\
+{                                                                           \
+    TCGv tmp_size, tmp_type;                                                \
+    int size;                                                               \
+                                                                            \
+    /* ST only uses 8/16 without suffix */                                  \
+    switch (SUFF) {                                                         \
+        case 8:                                                             \
+            size = 1;                                                       \
+            break;                                                          \
+        case 16:                                                            \
+            size = 2;                                                       \
+            break;                                                          \
+        case 32:                                                            \
+            size = 4;                                                       \
+            break;                                                          \
+    }                                                                       \
+                                                                            \
+    tmp_size = tcg_const_i32(size);                                         \
+    tmp_type = tcg_const_i32(0);                                            \
+    gen_helper_store_callback_pre(addr, tmp_size, tmp_type);                \
+    tcg_gen_qemu_st_i32(val, addr, index, OPC);                             \
+    gen_helper_store_callback_post(addr, tmp_size, tmp_type);               \
+    tcg_temp_free_i32(tmp_size);                                            \
+    tcg_temp_free_i32(tmp_type);                                            \
 }
 
 static inline void gen_aa32_ld64(TCGv_i64 val, TCGv_i32 addr, int index)
 {
+    TCGv tmp_size, tmp_type;
+    int size = 8;
+
+    tmp_size = tcg_const_i32(size);
+    tmp_type = tcg_const_i32(1);
+    gen_helper_load_callback_pre(addr, tmp_size, tmp_type);
     tcg_gen_qemu_ld_i64(val, addr, index, MO_TEQ);
+    gen_helper_load_callback_post(addr, tmp_size, tmp_type);
+    tcg_temp_free_i32(tmp_size);
+    tcg_temp_free_i32(tmp_type);
 }
 
 static inline void gen_aa32_st64(TCGv_i64 val, TCGv_i32 addr, int index)
 {
+    TCGv tmp_size, tmp_type;
+    int size = 8;
+
+    tmp_size = tcg_const_i32(size);
+    tmp_type = tcg_const_i32(0);
+    gen_helper_load_callback_pre(addr, tmp_size, tmp_type);
     tcg_gen_qemu_st_i64(val, addr, index, MO_TEQ);
+    gen_helper_load_callback_post(addr, tmp_size, tmp_type);
+    tcg_temp_free_i32(tmp_size);
+    tcg_temp_free_i32(tmp_type);
 }
 
 #else
 
+// TODO: Generate callbacks
 #define DO_GEN_LD(SUFF, OPC)                                             \
 static inline void gen_aa32_ld##SUFF(TCGv_i32 val, TCGv_i32 addr, int index) \
 {                                                                        \
@@ -7483,7 +7545,7 @@ static void disas_arm_insn(CPUARMState * env, DisasContext *s)
     TCGv_i32 tmp3;
     TCGv_i32 addr;
     TCGv_i64 tmp64;
-    TCGv_i32 tmp_insn, tmp_size, tmp_type;//, tmp_addr;
+    TCGv_i32 tmp_insn, tmp_size, tmp_type;
 
     insn = arm_ldl_code(env, s->pc, s->bswap_code);
     s->pc += 4;
@@ -10148,7 +10210,7 @@ static void disas_thumb_insn(CPUARMState *env, DisasContext *s)
     TCGv_i32 tmp;
     TCGv_i32 tmp2;
     TCGv_i32 addr;
-    TCGv_i32 tmp_insn, tmp_size, tmp_type, tmp_addr;
+    TCGv_i32 tmp_insn, tmp_size, tmp_type;
 
     if (s->condexec_mask) {
         cond = s->condexec_cond;
@@ -10461,59 +10523,32 @@ static void disas_thumb_insn(CPUARMState *env, DisasContext *s)
             tmp = tcg_temp_new_i32();
         }
 
-	tmp_addr = addr;
         switch (op) {
         case 0: /* str */
-            tmp_size = tcg_const_i32(4);
-            tmp_type = tcg_const_i32(0);
-            gen_helper_store_callback_pre(tmp_addr, tmp_size, tmp_type);
             gen_aa32_st32(tmp, addr, get_mem_index(s));
             break;
         case 1: /* strh */
-            tmp_size = tcg_const_i32(2);
-            tmp_type = tcg_const_i32(0);
-            gen_helper_store_callback_pre(tmp_addr, tmp_size, tmp_type);
             gen_aa32_st16(tmp, addr, get_mem_index(s));
             break;
         case 2: /* strb */
-            tmp_size = tcg_const_i32(1);
-            tmp_type = tcg_const_i32(0);
-            gen_helper_store_callback_pre(tmp_addr, tmp_size, tmp_type);
             gen_aa32_st8(tmp, addr, get_mem_index(s));
             break;
         case 3: /* ldrsb */
-            tmp_size = tcg_const_i32(1);
-            tmp_type = tcg_const_i32(1);
-            gen_helper_load_callback_pre(tmp_addr, tmp_size, tmp_type);
             gen_aa32_ld8s(tmp, addr, get_mem_index(s));
             break;
         case 4: /* ldr */
-            tmp_size = tcg_const_i32(4);
-            tmp_type = tcg_const_i32(1);
-            gen_helper_load_callback_pre(tmp_addr, tmp_size, tmp_type);
             gen_aa32_ld32u(tmp, addr, get_mem_index(s));
             break;
         case 5: /* ldrh */
-            tmp_size = tcg_const_i32(2);
-            tmp_type = tcg_const_i32(1);
-            gen_helper_load_callback_pre(tmp_addr, tmp_size, tmp_type);
             gen_aa32_ld16u(tmp, addr, get_mem_index(s));
             break;
         case 6: /* ldrb */
-            tmp_size = tcg_const_i32(1);
-            tmp_type = tcg_const_i32(1);
-            gen_helper_load_callback_pre(tmp_addr, tmp_size, tmp_type);
             gen_aa32_ld8u(tmp, addr, get_mem_index(s));
             break;
         case 7: /* ldrsh */
-            tmp_size = tcg_const_i32(2);
-            tmp_type = tcg_const_i32(1);
-            gen_helper_load_callback_pre(tmp_addr, tmp_size, tmp_type);
             gen_aa32_ld16s(tmp, addr, get_mem_index(s));
             break;
         }
-        tcg_temp_free_i32(tmp_type);
-        tcg_temp_free_i32(tmp_size);
         if (op >= 3) { /* load */
             store_reg(s, rd, tmp);
         } else {
