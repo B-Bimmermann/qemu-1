@@ -10512,7 +10512,6 @@ static void disas_thumb_insn(CPUARMState *env, DisasContext *s)
             gen_aa32_ld16s(tmp, addr, get_mem_index(s));
             break;
         }
-        //tcg_temp_free_i32(tmp_addr);
         tcg_temp_free_i32(tmp_type);
         tcg_temp_free_i32(tmp_size);
         if (op >= 3) { /* load */
