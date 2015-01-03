@@ -10461,6 +10461,7 @@ static void disas_thumb_insn(CPUARMState *env, DisasContext *s)
             tmp = tcg_temp_new_i32();
         }
 
+	tmp_addr = addr;
         switch (op) {
         case 0: /* str */
             tmp_size = tcg_const_i32(4);
