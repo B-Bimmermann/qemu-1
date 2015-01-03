@@ -862,13 +862,7 @@ uint32_t HELPER(ror_cc)(CPUARMState *env, uint32_t x, uint32_t i)
 
 void HELPER(inst_callback)(uint32_t vaddr, uint32_t length, uint32_t type)
 {
-	static bool once = false;
-
-	if (once)
-		return;
-
-	if (qsim_inst_cb != NULL && !once) {
-		qsim_memop_flag = 0;
+	if (qsim_inst_cb != NULL) {
 
 		// get physical addr
 		/*
@@ -876,9 +870,6 @@ void HELPER(inst_callback)(uint32_t vaddr, uint32_t length, uint32_t type)
 					(uint8_t *)qsim_host_addr, type);
 					*/
 		qsim_inst_cb(qsim_id, vaddr, 0, length, 0, type);
-		once = true;
-
-		qsim_memop_flag = 1;
 	}
 
 	qsim_icount--;
@@ -889,15 +880,12 @@ void HELPER(inst_callback)(uint32_t vaddr, uint32_t length, uint32_t type)
 	return;
 }
 
-static void memop_callback(uint32_t addr, uint32_t size, int type)
+static inline void memop_callback(uint32_t addr, uint32_t size, int type)
 {
-	static bool once = false;
-
-	if (once || qsim_mem_cb == NULL)
+	if (qsim_mem_cb == NULL)
 		return;
 
 	qsim_mem_cb(qsim_id, addr, 0, size, type);
-	once = true;
 }
 
 void HELPER(store_callback_pre)(uint32_t vaddr, uint32_t length, uint32_t type)
