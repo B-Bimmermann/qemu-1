@@ -555,7 +555,7 @@ static void memop_callback(uint32_t addr, uint32_t size, int type)
 {
 	static bool once = false;
 
-	if (once)
+	if (once || qsim_mem_cb == NULL)
 		return;
 
 	qsim_mem_cb(qsim_id, addr, 0, size, type);
