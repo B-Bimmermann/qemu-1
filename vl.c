@@ -2821,12 +2821,24 @@ void qemu_init(qemu_ramdesc_t *ram,
       "-monitor", "/dev/null", "-nographic", "-serial", "/dev/null",
       "-no-acpi", "-no-hpet", "-m", ram_size, NULL
     }; */
+    const char *qsim_prefix = getenv("QSIM_PREFIX");
+    char arm_kernel_path[1024];
+    char arm_initrd_path[1024];
+    char arm_sd_path[1024];
+
+    strcpy(arm_kernel_path, qsim_prefix);
+    strcpy(arm_initrd_path, qsim_prefix);
+    strcpy(arm_sd_path, qsim_prefix);
+    strcat(arm_kernel_path, "/../arm_images/vmlinuz-3.2.0-4-vexpress");
+    strcat(arm_initrd_path, "/../arm_images/initrd.img-3.2.0-4-vexpress");
+    strcat(arm_sd_path, "/../arm_images/arm_disk.img");
+
 	const char *argv[] = {
 		"qemu", "-monitor", "/dev/null",
 		"-m", ram_size, "-M", "vexpress-a9",
-		"-kernel", "/home/pranith/devops/code/arm_images/after-copy/vmlinuz-3.2.0-4-vexpress",
-		"-initrd", "/home/pranith/devops/code/arm_images/after-copy/initrd.img-3.2.0-4-vexpress",
-		"-sd", "/home/pranith/devops/code/arm_images/armdisk.img",
+		"-kernel", arm_kernel_path,
+		"-initrd", arm_initrd_path,
+		"-sd", arm_sd_path,
 		"-append", "root=/dev/mmcblk0p2",
 		NULL
 	};
