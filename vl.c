@@ -3005,7 +3005,7 @@ void qemu_init(qemu_ramdesc_t *ram,
     strcpy(arm_sd_path, qsim_prefix);
     strcat(arm_kernel_path, "/../arm_images/vmlinuz-3.2.0-4-vexpress");
     strcat(arm_initrd_path, "/../arm_images/initrd.img-3.2.0-4-vexpress");
-    strcat(arm_sd_path, "/../arm_images/arm_disk.img");
+    strcat(arm_sd_path, "/../arm_images/armdisk.img");
 
 	const char *argv[] = {
 		"qemu", "-monitor", "/dev/null",
