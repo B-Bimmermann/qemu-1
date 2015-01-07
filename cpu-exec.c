@@ -345,6 +345,11 @@ int cpu_exec(CPUState *cpu)
     uintptr_t next_tb;
     SyncClocks sc;
 
+    /* This must be volatile so it is not trashed by longjmp() */
+#if defined(CONFIG_USER_ONLY)
+    volatile bool have_tb_lock = false;
+#endif
+
     if (async_safe_work_pending()) {
         cpu->exit_request = 1;
         return 0;
@@ -468,7 +473,10 @@ int cpu_exec(CPUState *cpu)
                     cpu->exception_index = EXCP_INTERRUPT;
                     cpu_loop_exit(cpu);
                 }
-                tb_lock();
+#if defined(CONFIG_USER_ONLY)
+                qemu_mutex_lock(&tcg_ctx.tb_ctx.tb_lock);
+                have_tb_lock = true;
+#endif
                 tb = tb_find_fast(cpu);
                 /* Note: we do it here to avoid a gcc bug on Mac OS X when
                    doing it in tb_find_slow */
@@ -491,7 +499,16 @@ int cpu_exec(CPUState *cpu)
                     tb_add_jump((TranslationBlock *)(next_tb & ~TB_EXIT_MASK),
                                 next_tb & TB_EXIT_MASK, tb);
                 }
-                tb_unlock();
+#if defined(CONFIG_USER_ONLY)
+                have_tb_lock = false;
+                qemu_mutex_unlock(&tcg_ctx.tb_ctx.tb_lock);
+#endif
+                /* cpu_interrupt might be called while translating the
+                   TB, but before it is linked into a potentially
+                   infinite loop and becomes env->current_tb. Avoid
+                   starting execution if there is a pending interrupt. */
+                cpu->current_tb = tb;
+                barrier();
                 if (likely(!cpu->exit_request)) {
                     trace_exec_tb(tb, tb->pc);
                     tc_ptr = tb->tc_ptr;
@@ -557,7 +574,12 @@ int cpu_exec(CPUState *cpu)
             x86_cpu = X86_CPU(cpu);
             env = &x86_cpu->env;
 #endif
-            tb_lock_reset();
+#if defined(CONFIG_USER_ONLY)
+            if (have_tb_lock) {
+                qemu_mutex_unlock(&tcg_ctx.tb_ctx.tb_lock);
+                have_tb_lock = false;
+            }
+#endif
         }
     } /* for(;;) */
 

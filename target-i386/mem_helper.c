@@ -35,6 +35,15 @@ void helper_unlock(void)
 {
     qemu_mutex_unlock(&global_cpu_lock);
 }
+#else
+void helper_lock(void)
+{
+}
+
+void helper_unlock(void)
+{
+}
+#endif
 
 void helper_lock_init(void)
 {
