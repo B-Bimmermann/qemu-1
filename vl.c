@@ -258,7 +258,7 @@ trans_cb_t  qsim_trans_cb  = NULL;
 uint64_t	qsim_host_addr;
 uint64_t	qsim_phys_addr;
 
-uint64_t    qsim_icount = 10000;
+uint64_t    qsim_icount = 1000000;
 
 qsim_ucontext_t main_context;
 qsim_ucontext_t qemu_context;
@@ -2851,12 +2851,12 @@ void qemu_init(qemu_ramdesc_t *ram,
     qsim_ram           = ram;
     qsim_qemu_is_slave = (ram != NULL);
 
-     // Call main with newly assembled argv.
+    // Call main with newly assembled argv.
     qsim_qemu_main(argc, argv, (char**)environ);
 
     // Initialize contexts.
     getcontext(&qemu_context);
-    getcontext(&main_context);
+    //getcontext(&main_context);
     
     // Create qemu stack.
     qemu_stack = g_malloc0(QEMU_STACK_SIZE);
@@ -2866,7 +2866,8 @@ void qemu_init(qemu_ramdesc_t *ram,
     qemu_context.uc_stack.ss_size = QEMU_STACK_SIZE;
     qemu_context.uc_link = &main_context;
     makecontext(&qemu_context, qsim_loop_main, 0);
-    //swapcontext(&main_context, &qemu_context);
+    // start initial boot - subtle signal issues if we do not start right away
+    swapcontext(&main_context, &qemu_context);
 }
 
 int qsim_qemu_main(int argc, const char **argv, char **envp)
