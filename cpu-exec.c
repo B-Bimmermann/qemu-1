@@ -130,6 +130,56 @@ static void init_delay_params(SyncClocks *sc, const CPUState *cpu)
 }
 #endif /* CONFIG USER ONLY */
 
+void cpu_loop_exit(CPUState *cpu)
+{
+    cpu->current_tb = NULL;
+    /* Release those mutex before long jump so other thread can work. */
+    tb_lock_reset();
+    siglongjmp(cpu->jmp_env, 1);
+}
+
+/* exit the current TB from a signal handler. The host registers are
+   restored in a state compatible with the CPU emulator
+ */
+#if defined(CONFIG_SOFTMMU)
+void cpu_resume_from_signal(CPUState *cpu, void *puc)
+{
+    /* XXX: restore cpu registers saved in host registers */
+
+    cpu->exception_index = -1;
+    /* Release those mutex before long jump so other thread can work. */
+    tb_lock_reset();
+    siglongjmp(cpu->jmp_env, 1);
+}
+
+void cpu_reload_memory_map(CPUState *cpu)
+{
+    AddressSpaceDispatch *d;
+
+    if (qemu_in_vcpu_thread()) {
+        /* Do not let the guest prolong the critical section as much as it
+         * as it desires.
+         *
+         * Currently, this is prevented by the I/O thread's periodinc kicking
+         * of the VCPU thread (iothread_requesting_mutex, qemu_cpu_kick_thread)
+         * but this will go away once TCG's execution moves out of the global
+         * mutex.
+         *
+         * This pair matches cpu_exec's rcu_read_lock()/rcu_read_unlock(), which
+         * only protects cpu->as->dispatch.  Since we reload it below, we can
+         * split the critical section.
+         */
+        rcu_read_unlock();
+        rcu_read_lock();
+    }
+
+    /* The CPU and TLB are protected by the iothread lock.  */
+    d = atomic_rcu_read(&cpu->as->dispatch);
+    cpu->memory_dispatch = d;
+    tlb_flush(cpu, 1);
+}
+#endif
+
 /* Execute a TB, and fix up the CPU state afterwards if necessary */
 static inline tcg_target_ulong cpu_tb_exec(CPUState *cpu, uint8_t *tb_ptr)
 {
@@ -235,7 +285,6 @@ static TranslationBlock *tb_find_physical(CPUState *cpu,
             /* check next page if needed */
             if (tb->page_addr[1] != -1) {
                 tb_page_addr_t phys_page2;
-
                 virt_page2 = (pc & TARGET_PAGE_MASK) +
                     TARGET_PAGE_SIZE;
                 phys_page2 = get_page_addr_code(env, virt_page2);
@@ -313,6 +362,7 @@ static inline TranslationBlock *tb_find_fast(CPUState *cpu)
                  tb->flags != flags)) {
         tb = tb_find_slow(cpu, pc, cs_base, flags);
     }
+
     return tb;
 }
 

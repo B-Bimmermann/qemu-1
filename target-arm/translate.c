@@ -11235,6 +11235,8 @@ void gen_intermediate_code(CPUARMState *env, TranslationBlock *tb)
 
     dc->tb = tb;
 
+    tb_lock();
+
     dc->is_jmp = DISAS_NEXT;
     dc->pc = pc_start;
     dc->singlestep_enabled = cs->singlestep_enabled;
