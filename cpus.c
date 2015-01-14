@@ -1409,12 +1409,12 @@ static void qemu_tcg_init_vcpu(CPUState *cpu)
 
     tcg_cpu_address_space_init(cpu, cpu->as);
 
+    cpu->halt_cond = g_malloc0(sizeof(QemuCond));
+    qemu_cond_init(cpu->halt_cond);
+
     /* share a single thread for all cpus with TCG */
     if (!tcg_cpu_thread) {
         cpu->thread = g_malloc0(sizeof(QemuThread));
-        cpu->halt_cond = g_malloc0(sizeof(QemuCond));
-        qemu_cond_init(cpu->halt_cond);
-        tcg_halt_cond = cpu->halt_cond;
         snprintf(thread_name, VCPU_THREAD_NAME_SIZE, "CPU %d/TCG",
                  cpu->cpu_index);
         qemu_thread_create(cpu->thread, thread_name, qemu_tcg_cpu_thread_fn,
@@ -1428,7 +1428,6 @@ static void qemu_tcg_init_vcpu(CPUState *cpu)
         tcg_cpu_thread = cpu->thread;
     } else {
         cpu->thread = tcg_cpu_thread;
-        cpu->halt_cond = tcg_halt_cond;
     }
 }
 
