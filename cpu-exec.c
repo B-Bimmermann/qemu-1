@@ -519,7 +519,6 @@ int cpu_exec(CPUState *cpu)
                     }
                 }
                 if (unlikely(cpu->exit_request)) {
-                    cpu->exit_request = 0;
                     cpu->exception_index = EXCP_INTERRUPT;
                     cpu_loop_exit(cpu);
                 }

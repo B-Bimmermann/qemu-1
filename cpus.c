@@ -147,6 +147,8 @@ typedef struct TimersState {
 } TimersState;
 
 static TimersState timers_state;
+/* CPU associated to this thread. */
+static __thread CPUState *tcg_thread_cpu;
 
 int64_t cpu_get_icount_raw(void)
 {
@@ -1580,7 +1582,8 @@ static void tcg_exec_all(void)
     if (next_cpu == NULL) {
         next_cpu = first_cpu;
     }
-    for (; next_cpu != NULL && !exit_request; next_cpu = CPU_NEXT(next_cpu)) {
+    for (; next_cpu != NULL && !first_cpu->exit_request;
+           next_cpu = CPU_NEXT(next_cpu)) {
         CPUState *cpu = next_cpu;
 
         qemu_clock_enable(QEMU_CLOCK_VIRTUAL,
