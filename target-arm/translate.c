@@ -914,6 +914,9 @@ static inline void store_reg_from_load(DisasContext *s, int reg, TCGv_i32 var)
 #else
 #define IS_USER_ONLY 0
 #endif
+/* Convert suffix to string */
+#define STRING(x) STR_HELPER(x)
+#define STR_HELPER(x) #x
 
 /* Abstractions of "generate code to do a guest load/store for
  * AArch32", where a vaddr is always 32 bits (and is zero
@@ -923,16 +926,55 @@ static inline void store_reg_from_load(DisasContext *s, int reg, TCGv_i32 var)
  * that the address argument is TCGv_i32 rather than TCGv.
  */
 
-static inline TCGv gen_aa32_addr(DisasContext *s, TCGv_i32 a32, TCGMemOp op)
-{
-    TCGv addr = tcg_temp_new();
-    tcg_gen_extu_i32_tl(addr, a32);
+// TODO: generate callbacks for 64-bit
+#define DO_GEN_LD(SUFF, OPC)                                                \
+static inline void gen_aa32_ld##SUFF(TCGv_i32 val, TCGv_i32 addr, int index)\
+{                                                                           \
+    TCGv tmp_size, tmp_type;                                                \
+    int size;                                                               \
+                                                                            \
+    if (!(strcmp(STRING(SUFF), "8u") && strcmp(STRING(SUFF), "8s")))        \
+        size = 1;                                                           \
+    else if (!(strcmp(STRING(SUFF), "16u") && strcmp(STRING(SUFF), "16s"))) \
+        size = 2;                                                           \
+    else if (!(strcmp(STRING(SUFF), "32u") && strcmp(STRING(SUFF), "32s"))) \
+        size = 4;                                                           \
+                                                                            \
+    tmp_size = tcg_const_i32(size);                                         \
+    tmp_type = tcg_const_i32(1);                                            \
+    gen_helper_load_callback_pre(addr, tmp_size, tmp_type);                 \
+    tcg_gen_qemu_ld_i32(val, addr, index, OPC);                             \
+    gen_helper_load_callback_post(addr, tmp_size, tmp_type);                \
+    tcg_temp_free_i32(tmp_size);                                            \
+    tcg_temp_free_i32(tmp_type);                                            \
+}
 
-    /* Not needed for user-mode BE32, where we use MO_BE instead.  */
-    if (!IS_USER_ONLY && s->sctlr_b && (op & MO_SIZE) < MO_32) {
-        tcg_gen_xori_tl(addr, addr, 4 - (1 << (op & MO_SIZE)));
-    }
-    return addr;
+#define DO_GEN_ST(SUFF, OPC)                                                \
+static inline void gen_aa32_st##SUFF(TCGv_i32 val, TCGv_i32 addr, int index)\
+{                                                                           \
+    TCGv tmp_size, tmp_type;                                                \
+    int size;                                                               \
+                                                                            \
+    /* ST only uses 8/16 without suffix */                                  \
+    switch (SUFF) {                                                         \
+        case 8:                                                             \
+            size = 1;                                                       \
+            break;                                                          \
+        case 16:                                                            \
+            size = 2;                                                       \
+            break;                                                          \
+        case 32:                                                            \
+            size = 4;                                                       \
+            break;                                                          \
+    }                                                                       \
+                                                                            \
+    tmp_size = tcg_const_i32(size);                                         \
+    tmp_type = tcg_const_i32(0);                                            \
+    gen_helper_store_callback_pre(addr, tmp_size, tmp_type);                \
+    tcg_gen_qemu_st_i32(val, addr, index, OPC);                             \
+    gen_helper_store_callback_post(addr, tmp_size, tmp_type);               \
+    tcg_temp_free_i32(tmp_size);                                            \
+    tcg_temp_free_i32(tmp_type);                                            \
 }
 
 static void gen_aa32_ld_i32(DisasContext *s, TCGv_i32 val, TCGv_i32 a32,
@@ -951,6 +993,7 @@ static void gen_aa32_st_i32(DisasContext *s, TCGv_i32 val, TCGv_i32 a32,
     tcg_temp_free(addr);
 }
 
+// TODO: Generate callbacks
 #define DO_GEN_LD(SUFF, OPC)                                             \
 static inline void gen_aa32_ld##SUFF(DisasContext *s, TCGv_i32 val,      \
                                      TCGv_i32 a32, int index)            \
@@ -976,10 +1019,19 @@ static inline void gen_aa32_frob64(DisasContext *s, TCGv_i64 val)
 static void gen_aa32_ld_i64(DisasContext *s, TCGv_i64 val, TCGv_i32 a32,
                             int index, TCGMemOp opc)
 {
+    TCGv tmp_size, tmp_type;
+    int size = 8;
+
+    tmp_size = tcg_const_i32(size);
+    tmp_type = tcg_const_i32(1);
+    gen_helper_load_callback_pre(addr, tmp_size, tmp_type);
     TCGv addr = gen_aa32_addr(s, a32, opc);
     tcg_gen_qemu_ld_i64(val, addr, index, opc);
     gen_aa32_frob64(s, val);
     tcg_temp_free(addr);
+    gen_helper_load_callback_post(addr, tmp_size, tmp_type);
+    tcg_temp_free_i32(tmp_size);
+    tcg_temp_free_i32(tmp_type);
 }
 
 static inline void gen_aa32_ld64(DisasContext *s, TCGv_i64 val,
@@ -991,8 +1043,13 @@ static inline void gen_aa32_ld64(DisasContext *s, TCGv_i64 val,
 static void gen_aa32_st_i64(DisasContext *s, TCGv_i64 val, TCGv_i32 a32,
                             int index, TCGMemOp opc)
 {
+    TCGv tmp_size, tmp_type;
+    int size = 8;
     TCGv addr = gen_aa32_addr(s, a32, opc);
 
+    tmp_size = tcg_const_i32(size);
+    tmp_type = tcg_const_i32(0);
+    gen_helper_load_callback_pre(addr, tmp_size, tmp_type);
     /* Not needed for user-mode BE32, where we use MO_BE instead.  */
     if (!IS_USER_ONLY && s->sctlr_b) {
         TCGv_i64 tmp = tcg_temp_new_i64();
@@ -1002,6 +1059,9 @@ static void gen_aa32_st_i64(DisasContext *s, TCGv_i64 val, TCGv_i32 a32,
     } else {
         tcg_gen_qemu_st_i64(val, addr, index, opc);
     }
+    gen_helper_load_callback_post(addr, tmp_size, tmp_type);
+    tcg_temp_free_i32(tmp_size);
+    tcg_temp_free_i32(tmp_type);
     tcg_temp_free(addr);
 }
 
