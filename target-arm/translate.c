@@ -7658,9 +7658,6 @@ static void disas_arm_insn(DisasContext *s, unsigned int insn)
     TCGv_i64 tmp64;
     TCGv_i32 tmp_insn, tmp_size, tmp_type;
 
-    insn = arm_ldl_code(env, s->pc, s->bswap_code);
-    s->pc += 4;
-
     tmp_insn = tcg_const_i32(insn);
     tmp_size = tcg_const_i32(4);
     tmp_type = tcg_const_i32(0);
