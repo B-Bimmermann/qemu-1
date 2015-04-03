@@ -25,6 +25,56 @@
 #include "qemu/thread.h"
 #include "qom/cpu.h"
 
+#ifndef QSIM_DEFS
+#define QSIM_DEFS
+#include "qsim-vm.h"
+#include "qsim-context.h"
+
+extern qsim_ucontext_t qemu_context;
+extern qsim_ucontext_t main_context;
+
+extern uint64_t qsim_host_addr;
+extern uint64_t qsim_phys_addr;
+
+#define QSIM_XSTRING(x) #x
+#define QSIM_STRING(x) QSIM_XSTRING(x)
+
+extern qemu_ramdesc_t *qsim_ram;
+extern mem_cb_t        qsim_mem_cb;
+extern int             qsim_cur_cpu;
+extern int             qsim_id;
+
+static inline uint64_t qsim_ram_addr_from_host(void* qsim_host_addr) {
+    uint64_t paddr;
+
+    if (qsim_host_addr >= (void*)qsim_ram->mem_ptr &&
+            qsim_host_addr < (void*)(qsim_ram->mem_ptr + qsim_ram->sz))
+        paddr = (uint64_t)qsim_host_addr - (uint64_t)qsim_ram->mem_ptr;
+    else
+        paddr = 0;
+    // Return null if this pointer is not in our RAM table.
+
+    return paddr;
+}
+
+extern int qsim_memop_flag;
+extern int qsim_memop_recursed;
+
+static inline int qsim_memop(uint64_t adr, uint64_t size, int type) {
+    if (qsim_mem_cb && !qsim_memop_recursed && !qsim_memop_flag) {
+        qsim_memop_recursed = 1;
+        qsim_phys_addr = qsim_ram_addr_from_host((void *)qsim_host_addr);
+        if (qsim_mem_cb(qsim_id, adr, qsim_phys_addr, size, type))
+            swapcontext(&qemu_context, &main_context);
+        qsim_memop_recursed = 0;
+        return 1;
+    }
+    return 0;
+}
+
+#endif
+
+
 /* some important defines:
  *
  * WORDS_ALIGNED : if defined, the host cpu can only make word aligned

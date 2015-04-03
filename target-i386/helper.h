@@ -217,3 +217,13 @@ DEF_HELPER_3(rcrl, tl, env, tl, tl)
 DEF_HELPER_3(rclq, tl, env, tl, tl)
 DEF_HELPER_3(rcrq, tl, env, tl, tl)
 #endif
+
+/* QSim */
+DEF_HELPER_4(inst_callback, tl, env, tl, tl, tl)
+DEF_HELPER_2(reg_read_callback, tl, tl, tl)
+DEF_HELPER_2(reg_write_callback, tl, tl, tl)
+DEF_HELPER_3(load_callback_pre, tl, env, tl, tl)
+DEF_HELPER_3(load_callback_post, tl, env, tl, tl)
+DEF_HELPER_4(store_callback_pre, tl, env, tl, tl, tl)
+DEF_HELPER_4(store_callback_post, tl, env, tl, tl, tl)
+DEF_HELPER_0(atomic_callback, void)

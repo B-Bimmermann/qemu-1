@@ -29,7 +29,6 @@
 #include "qsim-vm.h"
 
 extern int 	qsim_qemu_is_slave;
-extern qemu_ramdesc_t	*qsim_ram;
 extern qsim_lockstruct  *qsim_ram_l;
 
 //#define DEBUG_UNASSIGNED

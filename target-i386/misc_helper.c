@@ -22,34 +22,52 @@
 #include "exec/helper-proto.h"
 #include "exec/cpu_ldst.h"
 
+extern io_cb_t qsim_io_cb;
+extern magic_cb_t qsim_magic_cb;
+
 void helper_outb(uint32_t port, uint32_t data)
 {
+    if (qsim_io_cb) qsim_io_cb(qsim_id, port, 1, 1, data);
     cpu_outb(port, data & 0xff);
 }
 
 target_ulong helper_inb(uint32_t port)
 {
-    return cpu_inb(port);
+    uint32_t *p;
+    if (qsim_io_cb) p = qsim_io_cb(qsim_id, port, 1, 0, 0);
+    else p = NULL;
+    if (!p) return cpu_inb(port);
+    else    return *p;
 }
 
 void helper_outw(uint32_t port, uint32_t data)
 {
+    if (qsim_io_cb) qsim_io_cb(qsim_id, port, 2, 1, data);
     cpu_outw(port, data & 0xffff);
 }
 
 target_ulong helper_inw(uint32_t port)
 {
-    return cpu_inw(port);
+    uint32_t *p;
+    if (qsim_io_cb) p = qsim_io_cb(qsim_id, port, 2, 0, 0);
+    else (p = NULL);
+    if (!p) return cpu_inw(port);
+    else    return *p;
 }
 
 void helper_outl(uint32_t port, uint32_t data)
 {
+    if (qsim_io_cb) qsim_io_cb(qsim_id, port, 4, 1, data);
     cpu_outl(port, data);
 }
 
 target_ulong helper_inl(uint32_t port)
 {
-    return cpu_inl(port);
+    uint32_t *p;
+    if (qsim_io_cb) p = qsim_io_cb(qsim_id, port, 4, 0, 0);
+    else p = NULL;
+    if (!p) return cpu_inl(port);
+    else    return *p;
 }
 
 void helper_into(CPUX86State *env, int next_eip_addend)
@@ -75,14 +93,23 @@ void helper_cpuid(CPUX86State *env)
 {
     uint32_t eax, ebx, ecx, edx;
 
+    eax = (uint32_t)env->regs[R_EAX];
+    eax &= 0xfffffff0;
+
+    if (qsim_magic_cb && qsim_magic_cb(qsim_id, env->regs[R_EAX]))
+      swapcontext(&qemu_context, &main_context);
+
     cpu_svm_check_intercept_param(env, SVM_EXIT_CPUID, 0);
 
-    cpu_x86_cpuid(env, (uint32_t)env->regs[R_EAX], (uint32_t)env->regs[R_ECX],
-                  &eax, &ebx, &ecx, &edx);
-    env->regs[R_EAX] = eax;
-    env->regs[R_EBX] = ebx;
-    env->regs[R_ECX] = ecx;
-    env->regs[R_EDX] = edx;
+    if ( eax == 0x40000000 || eax == 0x80000000 || eax == 0) {
+        cpu_x86_cpuid(env, (uint32_t)env->regs[R_EAX],
+                (uint32_t)env->regs[R_ECX],
+                &eax, &ebx, &ecx, &edx);
+        env->regs[R_EAX] = eax;
+        env->regs[R_EBX] = ebx;
+        env->regs[R_ECX] = ecx;
+        env->regs[R_EDX] = edx;
+    }
 }
 
 #if defined(CONFIG_USER_ONLY)
@@ -191,7 +218,7 @@ void helper_rdtsc(CPUX86State *env)
     }
     cpu_svm_check_intercept_param(env, SVM_EXIT_RDTSC, 0);
 
-    val = cpu_get_tsc(env) + env->tsc_offset;
+    val = 0;//cpu_get_tsc(env) + env->tsc_offset;
     env->regs[R_EAX] = (uint32_t)(val);
     env->regs[R_EDX] = (uint32_t)(val >> 32);
 }
@@ -231,6 +258,11 @@ void helper_wrmsr(CPUX86State *env)
 
     val = ((uint32_t)env->regs[R_EAX]) |
         ((uint64_t)((uint32_t)env->regs[R_EDX]) << 32);
+
+    printf("MSR Write 0x%08x, val=%08llx\n",
+           (unsigned)env->regs[R_ECX], (((unsigned long
+                       long)(unsigned)env->regs[R_EDX])<<32) |
+                                      env->regs[R_EAX]);
 
     switch ((uint32_t)env->regs[R_ECX]) {
     case MSR_IA32_SYSENTER_CS:
@@ -382,6 +414,8 @@ void helper_rdmsr(CPUX86State *env)
     uint64_t val;
 
     cpu_svm_check_intercept_param(env, SVM_EXIT_MSR, 0);
+
+    printf("MSR Read 0x%08x\n", (unsigned)env->regs[R_ECX]);
 
     switch ((uint32_t)env->regs[R_ECX]) {
     case MSR_IA32_SYSENTER_CS:
