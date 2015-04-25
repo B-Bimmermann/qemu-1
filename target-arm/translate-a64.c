@@ -859,7 +859,13 @@ static void do_gpr_ld_memidx(DisasContext *s,
         memop += MO_SIGN;
     }
 
+    tmp_size = tcg_const_i32(size);
+    tmp_type = tcg_const_i32(1);
+    gen_helper_load_callback_pre(tcg_addr, tmp_size, tmp_type);
     tcg_gen_qemu_ld_i64(dest, tcg_addr, memidx, memop);
+    gen_helper_load_callback_post(tcg_addr, tmp_size, tmp_type);
+    tcg_temp_free_i32(tmp_size);
+    tcg_temp_free_i32(tmp_type);
 
     if (extend && is_signed) {
         g_assert(size < 3);
@@ -938,6 +944,7 @@ static void do_fp_ld(DisasContext *s, int destidx, TCGv_i64 tcg_addr, int size)
         tmphi = tcg_temp_new_i64();
         tcg_hiaddr = tcg_temp_new_i64();
 
+        tcg_gen_qemu_ld_i64(tmplo, tcg_addr, get_mem_index(s), MO_TEQ);
         tcg_gen_addi_i64(tcg_hiaddr, tcg_addr, 8);
         tcg_gen_qemu_ld_i64(tmplo, be ? tcg_hiaddr : tcg_addr, get_mem_index(s),
                             s->be_data | MO_Q);
@@ -1081,7 +1088,7 @@ static void clear_vec_high(DisasContext *s, int rd)
 static void do_vec_st(DisasContext *s, int srcidx, int element,
                       TCGv_i64 tcg_addr, int size)
 {
-    TCGMemOp memop = s->be_data + size;
+    TCGMemOp memop = MO_TE + size;
     TCGv_i64 tcg_tmp = tcg_temp_new_i64();
 
     read_vec_element(s, tcg_tmp, srcidx, element, size);
@@ -1094,7 +1101,7 @@ static void do_vec_st(DisasContext *s, int srcidx, int element,
 static void do_vec_ld(DisasContext *s, int destidx, int element,
                       TCGv_i64 tcg_addr, int size)
 {
-    TCGMemOp memop = s->be_data + size;
+    TCGMemOp memop = MO_TE + size;
     TCGv_i64 tcg_tmp = tcg_temp_new_i64();
 
     tcg_gen_qemu_ld_i64(tcg_tmp, tcg_addr, get_mem_index(s), memop);
@@ -1522,18 +1529,16 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
          * runtime; this may result in an exception.
          */
         TCGv_ptr tmpptr;
-        TCGv_i32 tcg_syn, tcg_isread;
+        TCGv_i32 tcg_syn;
         uint32_t syndrome;
 
         gen_a64_set_pc_im(s->pc - 4);
         tmpptr = tcg_const_ptr(ri);
         syndrome = syn_aa64_sysregtrap(op0, op1, op2, crn, crm, rt, isread);
         tcg_syn = tcg_const_i32(syndrome);
-        tcg_isread = tcg_const_i32(isread);
-        gen_helper_access_check_cp_reg(cpu_env, tmpptr, tcg_syn, tcg_isread);
+        gen_helper_access_check_cp_reg(cpu_env, tmpptr, tcg_syn);
         tcg_temp_free_ptr(tmpptr);
         tcg_temp_free_i32(tcg_syn);
-        tcg_temp_free_i32(tcg_isread);
     }
 
     /* Handle special cases first */
@@ -1671,12 +1676,12 @@ static void disas_exc(DisasContext *s, uint32_t insn)
          * instruction works properly.
          */
         switch (op2_ll) {
-        case 1:                                                     /* SVC */
+        case 1:
             gen_ss_advance(s);
             gen_exception_insn(s, 0, EXCP_SWI, syn_aa64_svc(imm16),
                                default_exception_el(s));
             break;
-        case 2:                                                     /* HVC */
+        case 2:
             if (s->current_el == 0) {
                 unallocated_encoding(s);
                 break;
@@ -1689,7 +1694,7 @@ static void disas_exc(DisasContext *s, uint32_t insn)
             gen_ss_advance(s);
             gen_exception_insn(s, 0, EXCP_HVC, syn_aa64_hvc(imm16), 2);
             break;
-        case 3:                                                     /* SMC */
+        case 3:
             if (s->current_el == 0) {
                 unallocated_encoding(s);
                 break;
@@ -1850,15 +1855,15 @@ static void disas_b_exc_sys(DisasContext *s, uint32_t insn)
  * mandated semantics, but it works for typical guest code sequences
  * and avoids having to monitor regular stores.
  *
- * The store exclusive uses the atomic cmpxchg primitives to avoid
- * races in multi-threaded linux-user and when MTTCG softmmu is
- * enabled.
+ * In system emulation mode only one CPU will be running at once, so
+ * this sequence is effectively atomic.  In user emulation mode we
+ * throw an exception and handle the atomic operation elsewhere.
  */
 static void gen_load_exclusive(DisasContext *s, int rt, int rt2,
                                TCGv_i64 addr, int size, bool is_pair)
 {
     TCGv_i64 tmp = tcg_temp_new_i64();
-    TCGMemOp memop = s->be_data + size;
+    TCGMemOp memop = MO_TE + size;
 
     g_assert(size <= 3);
     tcg_gen_qemu_ld_i64(tmp, addr, get_mem_index(s), memop);
@@ -1883,6 +1888,16 @@ static void gen_load_exclusive(DisasContext *s, int rt, int rt2,
     tcg_gen_mov_i64(cpu_exclusive_addr, addr);
 }
 
+#ifdef CONFIG_USER_ONLY
+static void gen_store_exclusive(DisasContext *s, int rd, int rt, int rt2,
+                                TCGv_i64 addr, int size, int is_pair)
+{
+    tcg_gen_mov_i64(cpu_exclusive_test, addr);
+    tcg_gen_movi_i32(cpu_exclusive_info,
+                     size | is_pair << 2 | (rd << 4) | (rt << 9) | (rt2 << 14));
+    gen_exception_internal_insn(s, 4, EXCP_STREX);
+}
+#else
 static void gen_store_exclusive(DisasContext *s, int rd, int rt, int rt2,
                                 TCGv_i64 inaddr, int size, int is_pair)
 {
@@ -1910,6 +1925,10 @@ static void gen_store_exclusive(DisasContext *s, int rd, int rt, int rt2,
     tcg_gen_brcond_i64(TCG_COND_NE, addr, cpu_exclusive_addr, fail_label);
 
     tmp = tcg_temp_new_i64();
+    tcg_gen_qemu_ld_i64(tmp, addr, get_mem_index(s), MO_TE + size);
+    tcg_gen_brcond_i64(TCG_COND_NE, tmp, cpu_exclusive_val, fail_label);
+    tcg_temp_free_i64(tmp);
+
     if (is_pair) {
         if (size == 2) {
             TCGv_i64 val = tcg_temp_new_i64();
@@ -2015,6 +2034,7 @@ static void disas_ldst_excl(DisasContext *s, uint32_t insn)
      */
 
     if (is_excl) {
+        gen_helper_atomic_callback();
         if (!is_store) {
             s->is_ldex = true;
             gen_load_exclusive(s, rt, rt2, tcg_addr, size, is_pair);
@@ -2275,8 +2295,11 @@ static void disas_ldst_reg_imm9(DisasContext *s, uint32_t insn,
                                 int rt,
                                 bool is_vector)
 {
+    int rt = extract32(insn, 0, 5);
     int rn = extract32(insn, 5, 5);
     int imm9 = sextract32(insn, 12, 9);
+    int opc = extract32(insn, 22, 2);
+    int size = extract32(insn, 30, 2);
     int idx = extract32(insn, 10, 2);
     bool is_signed = false;
     bool is_store = false;
@@ -11175,10 +11198,19 @@ static void disas_data_proc_simd_fp(DisasContext *s, uint32_t insn)
 static void disas_a64_insn(CPUARMState *env, DisasContext *s)
 {
     uint32_t insn;
+    TCGv_i32 tmp_insn, tmp_size, tmp_type;
 
     insn = arm_ldl_code(env, s->pc, s->sctlr_b);
     s->insn = insn;
     s->pc += 4;
+
+    tmp_insn = tcg_const_i32(insn);
+    tmp_size = tcg_const_i32(4);
+    tmp_type = tcg_const_i32(0);
+    gen_helper_inst_callback(tmp_insn, tmp_size, tmp_type);
+    tcg_temp_free_i32(tmp_insn);
+    tcg_temp_free_i32(tmp_size);
+    tcg_temp_free_i32(tmp_type);
 
     s->fp_access_checked = false;
 
