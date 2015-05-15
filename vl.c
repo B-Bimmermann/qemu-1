@@ -261,6 +261,8 @@ io_cb_t     qsim_io_cb     = NULL;
 reg_cb_t    qsim_reg_cb    = NULL;
 trans_cb_t  qsim_trans_cb  = NULL;
 
+bool qsim_gen_callbacks = false;
+
 uint64_t	qsim_host_addr;
 uint64_t	qsim_phys_addr;
 
@@ -284,6 +286,13 @@ void set_magic_cb (magic_cb_t  cb) { qsim_magic_cb  = cb; }
 void set_io_cb    (io_cb_t     cb) { qsim_io_cb     = cb; }
 void set_reg_cb   (reg_cb_t    cb) { qsim_reg_cb    = cb; }
 void set_trans_cb (trans_cb_t  cb) { qsim_trans_cb  = cb; }
+
+void set_gen_cbs  (bool state) {
+
+  // Mark all generated TBs as stale so that new TBs are generated
+
+  qsim_gen_callbacks = state;
+}
 
 static QemuOptsList qemu_rtc_opts = {
     .name = "rtc",
@@ -2525,6 +2534,8 @@ static void monitor_parse(const char *optarg, const char *mode, bool pretty)
     qemu_opt_set(opts, "mode", mode, &error_abort);
     qemu_opt_set(opts, "chardev", label, &error_abort);
     qemu_opt_set_bool(opts, "pretty", pretty, &error_abort);
+    if (def)
+        qemu_opt_set(opts, "default", "on", &error_abort);
     monitor_device_index++;
 }
 
