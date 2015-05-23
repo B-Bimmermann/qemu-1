@@ -3163,8 +3163,9 @@ void qemu_init(qemu_ramdesc_t *ram,
         "-kernel", arm_kernel_path,
         "-initrd", arm_initrd_path,
         "-append", "root=/dev/sda2",
-        "-nographic",
-		NULL
+        "-display", "sdl",
+        "-redir", "tcp:2222::22",
+        NULL
 	};
 
 #elif defined(X86_64)
