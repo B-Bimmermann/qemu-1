@@ -37,6 +37,8 @@
 
 #include "trace-tcg.h"
 
+#include "qsim-vm.h"
+
 static TCGv_i64 cpu_X[32];
 static TCGv_i64 cpu_pc;
 static TCGv_i32 cpu_NF, cpu_ZF, cpu_CF, cpu_VF;
@@ -10869,15 +10871,18 @@ static void disas_a64_insn(CPUARMState *env, DisasContext *s)
 {
     uint32_t insn;
     TCGv_i32 tmp_insn, tmp_size, tmp_type;
+    TCGArg *itype_arg;
 
     insn = arm_ldl_code(env, s->pc, s->bswap_code);
     s->insn = insn;
-    s->pc += 4;
 
+    // hack to encode the instruction type and arg length
+    // ilen_arg  = tcg_ctx.gen_opparam_ptr + 3;
+    itype_arg = tcg_ctx.gen_opparam_ptr + 5;
     if (qsim_gen_callbacks) {
-        tmp_insn = tcg_const_i32(insn);
+        tmp_insn = tcg_const_i32(s->pc);
         tmp_size = tcg_const_i32(4);
-        tmp_type = tcg_const_i32(0);
+        tmp_type = tcg_const_i32(0xdeadbeef);
         gen_helper_inst_callback(tmp_insn, tmp_size, tmp_type);
         tcg_temp_free_i32(tmp_insn);
         tcg_temp_free_i32(tmp_size);
@@ -10885,6 +10890,9 @@ static void disas_a64_insn(CPUARMState *env, DisasContext *s)
     } else {
         gen_helper_qsim_callback();
     }
+    s->pc += 4;
+
+    *itype_arg = QSIM_INST_NULL;
 
     s->fp_access_checked = false;
 

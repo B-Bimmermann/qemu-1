@@ -874,7 +874,7 @@ extern bool qsim_gen_callbacks;
 #define DO_GEN_LD(SUFF, OPC)                                                \
 static inline void gen_aa32_ld##SUFF(TCGv_i32 val, TCGv_i32 addr, int index)\
 {                                                                           \
-    TCGv tmp_size = 0, tmp_type = 0;                                                \
+    TCGv tmp_size = 0, tmp_type = 0;                                        \
     int size;                                                               \
                                                                             \
     if (!(strcmp(STRING(SUFF), "8u") && strcmp(STRING(SUFF), "8s")))        \
@@ -900,7 +900,7 @@ static inline void gen_aa32_ld##SUFF(TCGv_i32 val, TCGv_i32 addr, int index)\
 #define DO_GEN_ST(SUFF, OPC)                                                \
 static inline void gen_aa32_st##SUFF(TCGv_i32 val, TCGv_i32 addr, int index)\
 {                                                                           \
-    TCGv tmp_size = 0, tmp_type = 0;                                                \
+    TCGv tmp_size = 0, tmp_type = 0;                                        \
     int size;                                                               \
                                                                             \
     /* ST only uses 8/16 without suffix */                                  \
@@ -970,7 +970,7 @@ static inline void gen_aa32_st64(TCGv_i64 val, TCGv_i32 addr, int index)
 #define DO_GEN_LD(SUFF, OPC)                                                \
 static inline void gen_aa32_ld##SUFF(TCGv_i32 val, TCGv_i32 addr, int index)\
 {                                                                           \
-    TCGv_i32 tmp_size = 0, tmp_type = 0;                                            \
+    TCGv_i32 tmp_size = 0, tmp_type = 0;                                    \
     TCGv addr64 = tcg_temp_new();                                           \
     int size;                                                               \
                                                                             \
@@ -999,7 +999,7 @@ static inline void gen_aa32_ld##SUFF(TCGv_i32 val, TCGv_i32 addr, int index)\
 #define DO_GEN_ST(SUFF, OPC)                                                \
 static inline void gen_aa32_st##SUFF(TCGv_i32 val, TCGv_i32 addr, int index)\
 {                                                                           \
-    TCGv_i32 tmp_size = 0, tmp_type = 0;                                            \
+    TCGv_i32 tmp_size = 0, tmp_type = 0;                                    \
     int size;                                                               \
     TCGv addr64 = tcg_temp_new();                                           \
                                                                             \
@@ -7721,7 +7721,7 @@ static void disas_arm_insn(DisasContext *s, unsigned int insn)
     TCGv_i32 tmp_insn = 0, tmp_size = 0, tmp_type = 0;
 
     if (qsim_gen_callbacks) {
-      tmp_insn = tcg_const_i32(insn);
+      tmp_insn = tcg_const_i32(s->pc - 4);
       tmp_size = tcg_const_i32(4);
       tmp_type = tcg_const_i32(0);
       gen_helper_inst_callback(tmp_insn, tmp_size, tmp_type);
@@ -10444,10 +10444,9 @@ static void disas_thumb_insn(CPUARMState *env, DisasContext *s)
     }
 
     insn = arm_lduw_code(env, s->pc, s->bswap_code);
-    s->pc += 2;
 
     if (qsim_gen_callbacks) {
-      tmp_insn = tcg_const_i32(insn);
+      tmp_insn = tcg_const_i32(s->pc);
       tmp_size = tcg_const_i32(2);
       tmp_type = tcg_const_i32(0);
       gen_helper_inst_callback(tmp_insn, tmp_size, tmp_type);
@@ -10457,6 +10456,7 @@ static void disas_thumb_insn(CPUARMState *env, DisasContext *s)
     } else {
         gen_helper_qsim_callback();
     }
+    s->pc += 2;
 
     switch (insn >> 12) {
     case 0: case 1:
