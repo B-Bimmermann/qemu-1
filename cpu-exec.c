@@ -359,6 +359,10 @@ int cpu_exec(CPUState *cpu)
         cpu->halted = 0;
     }
 
+    if (!tcg_cpu_try_start_execution(cpu)) {
+        cpu->exit_request = 1;
+        return 0;
+    }
     current_cpu = cpu;
     atomic_mb_set(&tcg_current_cpu, cpu);
     rcu_read_lock();
