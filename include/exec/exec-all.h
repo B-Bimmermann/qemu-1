@@ -87,6 +87,7 @@ void QEMU_NORETURN cpu_loop_exit_restore(CPUState *cpu, uintptr_t pc);
 void cpu_reloading_memory_map(void);
 void tcg_cpu_address_space_init(CPUState *cpu, AddressSpace *as);
 /* cputlb.c */
+void tlb_flush_page_all(target_ulong addr);
 /**
  * tlb_flush_page:
  * @cpu: CPU whose TLB should be flushed
@@ -108,6 +109,7 @@ void tlb_flush_page(CPUState *cpu, target_ulong addr);
  * TLB entries, and the argument is ignored.
  */
 void tlb_flush(CPUState *cpu, int flush_global);
+void tlb_flush_all(int flush_global);
 /**
  * tlb_flush_page_by_mmuidx:
  * @cpu: CPU whose TLB should be flushed
