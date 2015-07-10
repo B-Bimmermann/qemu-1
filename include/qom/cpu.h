@@ -270,6 +270,8 @@ struct CPUState {
     uint32_t host_tid;
     bool running;
     struct QemuCond *halt_cond;
+    QemuMutex work_mutex;
+    struct qemu_work_item *queued_work_first, *queued_work_last;
     bool thread_kicked;
     bool created;
     bool stop;
