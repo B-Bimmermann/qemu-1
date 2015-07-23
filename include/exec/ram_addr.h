@@ -21,6 +21,7 @@
 
 #ifndef CONFIG_USER_ONLY
 #include "hw/xen/xen.h"
+#include "sysemu/sysemu.h"
 
 typedef struct RAMBlock RAMBlock;
 
@@ -83,6 +84,13 @@ int qemu_ram_resize(ram_addr_t base, ram_addr_t newsize, Error **errp);
 
 #define DIRTY_CLIENTS_ALL     ((1 << DIRTY_MEMORY_NUM) - 1)
 #define DIRTY_CLIENTS_NOCODE  (DIRTY_CLIENTS_ALL & ~(1 << DIRTY_MEMORY_CODE))
+
+/* Exclusive bitmap support. */
+#define EXCL_BITMAP_CELL_SZ 8
+#define EXCL_BITMAP_GET_BIT_OFFSET(addr) \
+        (EXCL_BITMAP_CELL_SZ * (addr >> TARGET_PAGE_BITS))
+#define EXCL_BITMAP_GET_BYTE_OFFSET(addr) (addr >> TARGET_PAGE_BITS)
+#define EXCL_IDX(cpu) (cpu % EXCL_BITMAP_CELL_SZ)
 
 static inline bool cpu_physical_memory_get_dirty(ram_addr_t start,
                                                  ram_addr_t length,
@@ -174,6 +182,11 @@ static inline void cpu_physical_memory_set_dirty_range(ram_addr_t start,
     }
     if (unlikely(mask & (1 << DIRTY_MEMORY_CODE))) {
         bitmap_set_atomic(d[DIRTY_MEMORY_CODE], page, end - page);
+    }
+    if (unlikely(mask & (1 << DIRTY_MEMORY_EXCLUSIVE))) {
+        bitmap_set_atomic(d[DIRTY_MEMORY_EXCLUSIVE],
+                        page * EXCL_BITMAP_CELL_SZ,
+                        (end - page) * EXCL_BITMAP_CELL_SZ);
     }
     xen_modified_memory(start, length);
 }
@@ -290,5 +303,68 @@ uint64_t cpu_physical_memory_sync_dirty_bitmap(unsigned long *dest,
 }
 
 void migration_bitmap_extend(ram_addr_t old, ram_addr_t new);
+
+/* One cell for each page. The n-th bit of a cell describes all the i-th vCPUs
+ * such that (i % EXCL_BITMAP_CELL_SZ) == n.
+ * A bit set to zero ensures that all the vCPUs described by the bit have the
+ * EXCL_BIT set for the page. */
+static inline void cpu_physical_memory_set_excl_dirty(ram_addr_t addr,
+                                                      uint32_t cpu)
+{
+    set_bit_atomic(EXCL_BITMAP_GET_BIT_OFFSET(addr) + EXCL_IDX(cpu),
+            ram_list.dirty_memory[DIRTY_MEMORY_EXCLUSIVE]);
+}
+
+static inline int cpu_physical_memory_excl_atleast_one_clean(ram_addr_t addr)
+{
+    uint8_t *bitmap;
+
+    bitmap = (uint8_t *)(ram_list.dirty_memory[DIRTY_MEMORY_EXCLUSIVE]);
+
+    /* This is safe even if smp_cpus < 8 since the unused bits are always 1. */
+    return bitmap[EXCL_BITMAP_GET_BYTE_OFFSET(addr)] != UCHAR_MAX;
+}
+
+/* Return true if the @cpu has the bit set for the page of @addr.
+ * If @cpu == smp_cpus return true if at least one vCPU has the dirty bit set
+ * for that page. */
+static inline int cpu_physical_memory_excl_is_dirty(ram_addr_t addr,
+                                                    unsigned long cpu)
+{
+    uint8_t *bitmap;
+
+    bitmap = (uint8_t *)ram_list.dirty_memory[DIRTY_MEMORY_EXCLUSIVE];
+
+    if (cpu == smp_cpus) {
+        if (smp_cpus >= EXCL_BITMAP_CELL_SZ) {
+            return bitmap[EXCL_BITMAP_GET_BYTE_OFFSET(addr)];
+        } else {
+            return bitmap[EXCL_BITMAP_GET_BYTE_OFFSET(addr)] &
+                                            ((1 << smp_cpus) - 1);
+        }
+    } else {
+        return bitmap[EXCL_BITMAP_GET_BYTE_OFFSET(addr)] & (1 << EXCL_IDX(cpu));
+    }
+}
+
+/* Clean the dirty bit of @cpu. If @cpu == smp_cpus clean the dirty bit for all
+ * the vCPUs. */
+static inline int cpu_physical_memory_clear_excl_dirty(ram_addr_t addr,
+                                                        uint32_t cpu)
+{
+    if (cpu == smp_cpus) {
+        int nr = (smp_cpus >= EXCL_BITMAP_CELL_SZ) ?
+                            EXCL_BITMAP_CELL_SZ : smp_cpus;
+
+        return bitmap_test_and_clear_atomic(
+                        ram_list.dirty_memory[DIRTY_MEMORY_EXCLUSIVE],
+                        EXCL_BITMAP_GET_BIT_OFFSET(addr), nr);
+    } else {
+        return bitmap_test_and_clear_atomic(
+                        ram_list.dirty_memory[DIRTY_MEMORY_EXCLUSIVE],
+                        EXCL_BITMAP_GET_BIT_OFFSET(addr) + EXCL_IDX(cpu), 1);
+    }
+}
+
 #endif
 #endif
