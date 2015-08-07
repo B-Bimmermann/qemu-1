@@ -64,8 +64,12 @@ TCGv_ptr cpu_env;
 static TCGv_i64 cpu_V0, cpu_V1, cpu_M0;
 static TCGv_i32 cpu_R[16];
 TCGv_i32 cpu_CF, cpu_NF, cpu_VF, cpu_ZF;
-TCGv_i64 cpu_exclusive_addr;
-TCGv_i64 cpu_exclusive_val;
+#ifndef CONFIG_TCG_USE_LDST_EXCL
+static TCGv_i64 cpu_exclusive_addr;
+static TCGv_i64 cpu_exclusive_val;
+#else
+static TCGv_i32 cpu_ll_sc_context;
+#endif
 #ifdef CONFIG_USER_ONLY
 TCGv_i64 cpu_exclusive_test;
 TCGv_i32 cpu_exclusive_info;
@@ -98,10 +102,15 @@ void arm_translate_init(void)
     cpu_VF = tcg_global_mem_new_i32(TCG_AREG0, offsetof(CPUARMState, VF), "VF");
     cpu_ZF = tcg_global_mem_new_i32(TCG_AREG0, offsetof(CPUARMState, ZF), "ZF");
 
+#ifdef CONFIG_TCG_USE_LDST_EXCL
+    cpu_ll_sc_context = tcg_global_mem_new_i32(TCG_AREG0,
+        offsetof(CPUARMState, ll_sc_context), "ll_sc_context");
+#else
     cpu_exclusive_addr = tcg_global_mem_new_i64(TCG_AREG0,
         offsetof(CPUARMState, exclusive_addr), "exclusive_addr");
     cpu_exclusive_val = tcg_global_mem_new_i64(TCG_AREG0,
         offsetof(CPUARMState, exclusive_val), "exclusive_val");
+#endif
 #ifdef CONFIG_USER_ONLY
     cpu_exclusive_test = tcg_global_mem_new_i64(TCG_AREG0,
         offsetof(CPUARMState, exclusive_test), "exclusive_test");
@@ -7413,17 +7422,64 @@ static void gen_logicq_cc(TCGv_i32 lo, TCGv_i32 hi)
     tcg_gen_or_i32(cpu_ZF, lo, hi);
 }
 
-/* Load/Store exclusive instructions are implemented by remembering
+/* If the TCG backend supports the slowpath for atomic instructions,
+   then the Load/Store exclusive instructions will use it, offloading
+   most of the work to the softmmu_llsc_template.h functions.
+
+   Otherwise, these instructions are implemented by remembering
    the value/address loaded, and seeing if these are the same
    when the store is performed. This should be sufficient to implement
    the architecturally mandated semantics, and avoids having to monitor
    regular stores.
 
-   In system emulation mode only one CPU will be running at once, so
-   this sequence is effectively atomic.  In user emulation mode we
-   throw an exception and handle the atomic operation elsewhere.  */
+   In user emulation mode we throw an exception and handle the atomic
+   operation elsewhere.  */
+#ifdef CONFIG_TCG_USE_LDST_EXCL
 static void gen_load_exclusive(DisasContext *s, int rt, int rt2,
                                TCGv_i32 addr, int size)
+{
+    TCGv_i32 tmp = tcg_temp_new_i32();
+    TCGv_i32 mem_idx = tcg_temp_new_i32();
+
+    tcg_gen_movi_i32(mem_idx, get_mem_index(s));
+
+    if (size != 3) {
+        switch (size) {
+        case 0:
+            gen_helper_ldlink_aa32_i8(tmp, cpu_env, addr, mem_idx);
+            break;
+        case 1:
+            gen_helper_ldlink_aa32_i16(tmp, cpu_env, addr, mem_idx);
+            break;
+        case 2:
+            gen_helper_ldlink_aa32_i32(tmp, cpu_env, addr, mem_idx);
+            break;
+        default:
+            abort();
+        }
+
+        store_reg(s, rt, tmp);
+    } else {
+        TCGv_i64 tmp64 = tcg_temp_new_i64();
+        TCGv_i32 tmph = tcg_temp_new_i32();
+
+        gen_helper_ldlink_aa32_i64(tmp64, cpu_env, addr, mem_idx);
+        tcg_gen_extr_i64_i32(tmp, tmph, tmp64);
+
+        store_reg(s, rt, tmp);
+        store_reg(s, rt2, tmph);
+
+        tcg_temp_free_i64(tmp64);
+    }
+
+    tcg_temp_free_i32(mem_idx);
+
+    /* From now on we are in LL/SC context. */
+    tcg_gen_movi_i32(cpu_ll_sc_context, 1);
+}
+#else
+static void gen_load_exclusive(DisasContext *s, int rt, int rt2,
+                           TCGv_i32 addr, int size)
 {
     TCGv_i32 tmp = tcg_temp_new_i32();
     TCGv_i64 val = tcg_temp_new_i64();
@@ -7461,10 +7517,14 @@ static void gen_load_exclusive(DisasContext *s, int rt, int rt2,
     tcg_temp_free_i64(val);
     store_reg(s, rt, tmp);
 }
+#endif
 
 static void gen_clrex(DisasContext *s)
 {
+#ifdef CONFIG_TCG_USE_LDST_EXCL
+#else
     gen_helper_atomic_clear(cpu_env);
+#endif
 }
 
 #ifdef CONFIG_USER_ONLY
@@ -7475,6 +7535,59 @@ static void gen_store_exclusive(DisasContext *s, int rd, int rt, int rt2,
     tcg_gen_movi_i32(cpu_exclusive_info,
                      size | (rd << 4) | (rt << 8) | (rt2 << 12));
     gen_exception_internal_insn(s, 4, EXCP_STREX);
+}
+#elif defined CONFIG_TCG_USE_LDST_EXCL
+static void gen_store_exclusive(DisasContext *s, int rd, int rt, int rt2,
+                                TCGv_i32 addr, int size)
+{
+    TCGv_i32 tmp, mem_idx;
+    TCGLabel *done_label, *fail_label;
+
+    fail_label = gen_new_label();
+    done_label = gen_new_label();
+    mem_idx = tcg_temp_new_i32();
+
+    /* Fail if we are not in LL/SC context. */
+    tcg_gen_brcondi_i32(TCG_COND_NE, cpu_ll_sc_context, 1, fail_label);
+
+    tcg_gen_movi_i32(mem_idx, get_mem_index(s));
+    tmp = load_reg(s, rt);
+
+    if (size != 3) {
+        switch (size) {
+        case 0:
+            gen_helper_stcond_aa32_i8(cpu_R[rd], cpu_env, addr, tmp, mem_idx);
+            break;
+        case 1:
+            gen_helper_stcond_aa32_i16(cpu_R[rd], cpu_env, addr, tmp, mem_idx);
+            break;
+        case 2:
+            gen_helper_stcond_aa32_i32(cpu_R[rd], cpu_env, addr, tmp, mem_idx);
+            break;
+        default:
+            abort();
+        }
+    } else {
+        TCGv_i64 tmp64;
+        TCGv_i32 tmp2;
+
+        tmp64 = tcg_temp_new_i64();
+        tmp2 = load_reg(s, rt2);
+        tcg_gen_concat_i32_i64(tmp64, tmp, tmp2);
+        gen_helper_stcond_aa32_i64(cpu_R[rd], cpu_env, addr, tmp64, mem_idx);
+
+        tcg_temp_free_i32(tmp2);
+        tcg_temp_free_i64(tmp64);
+    }
+    tcg_gen_br(done_label);
+
+    gen_set_label(fail_label);
+    tcg_gen_movi_i32(cpu_ll_sc_context, 0);
+    tcg_gen_movi_i32(cpu_R[rd], 1);
+    gen_set_label(done_label);
+
+    tcg_temp_free_i32(tmp);
+    tcg_temp_free_i32(mem_idx);
 }
 #else
 static void gen_store_exclusive(DisasContext *s, int rd, int rt, int rt2,
@@ -11145,17 +11258,8 @@ static bool insn_crosses_page(CPUARMState *env, DisasContext *s)
 }
 
 /* generate intermediate code in gen_opc_buf and gen_opparam_buf for
-<<<<<<< 0a842afc5aa09727a688f24c93c755c5aee48275
    basic block 'tb'.  */
 void gen_intermediate_code(CPUARMState *env, TranslationBlock *tb)
-=======
-   basic block 'tb'. If search_pc is TRUE, also generate PC
-   information for each intermediate instruction.
-   This must be called with tb_lock held. */
-static inline void gen_intermediate_code_internal(ARMCPU *cpu,
-                                                  TranslationBlock *tb,
-                                                  bool search_pc)
->>>>>>> tb_lock: fix so it isn't recursive.
 {
     ARMCPU *cpu = arm_env_get_cpu(env);
     CPUState *cs = CPU(cpu);
@@ -11533,30 +11637,8 @@ done_generating:
         qemu_log("\n");
     }
 #endif
-<<<<<<< 0a842afc5aa09727a688f24c93c755c5aee48275
     tb->size = dc->pc - pc_start;
     tb->icount = num_insns;
-=======
-    if (search_pc) {
-        j = tcg_op_buf_count();
-        lj++;
-        while (lj <= j)
-            tcg_ctx.gen_opc_instr_start[lj++] = 0;
-    } else {
-        tb->size = dc->pc - pc_start;
-        tb->icount = num_insns;
-    }
-}
-
-void gen_intermediate_code(CPUARMState *env, TranslationBlock *tb)
-{
-    gen_intermediate_code_internal(arm_env_get_cpu(env), tb, false);
-}
-
-void gen_intermediate_code_pc(CPUARMState *env, TranslationBlock *tb)
-{
-    gen_intermediate_code_internal(arm_env_get_cpu(env), tb, true);
->>>>>>> tb_lock: fix so it isn't recursive.
 }
 
 static const char *cpu_mode_names[16] = {
