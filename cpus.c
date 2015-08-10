@@ -67,6 +67,7 @@
 
 int64_t max_delay;
 int64_t max_advance;
+int safe_work_pending; /* Number of safe work pending for all VCPUs. */
 
 /* vcpu throttling controls */
 static QEMUTimer *throttle_timer;
@@ -75,8 +76,6 @@ static unsigned int throttle_percentage;
 #define CPU_THROTTLE_PCT_MIN 1
 #define CPU_THROTTLE_PCT_MAX 99
 #define CPU_THROTTLE_TIMESLICE_NS 10000000
-
-int safe_work_pending; /* Number of safe work pending for all VCPUs. */
 
 bool cpu_is_stopped(CPUState *cpu)
 {
@@ -1009,23 +1008,16 @@ void async_run_safe_work_on_cpu(CPUState *cpu, void (*func)(void *data),
     qemu_mutex_unlock(&cpu->work_mutex);
 
     CPU_FOREACH(cpu) {
-        qemu_cpu_kick_thread(cpu);
+        qemu_cpu_kick(cpu);
     }
 }
 
 static void flush_queued_safe_work(CPUState *cpu)
 {
     struct qemu_work_item *wi;
-    CPUState *other_cpu;
 
     if (cpu->queued_safe_work_first == NULL) {
         return;
-    }
-
-    CPU_FOREACH(other_cpu) {
-        if (!tcg_cpu_try_block_execution(other_cpu)) {
-            return;
-        }
     }
 
     qemu_mutex_lock(&cpu->work_mutex);
@@ -1102,10 +1094,6 @@ static void qemu_tcg_wait_io_event(CPUState *cpu)
             qemu_clock_warp(QEMU_CLOCK_VIRTUAL);
         }
         qemu_cond_wait(cpu->halt_cond, &qemu_global_mutex);
-    }
-
-    while (iothread_requesting_mutex) {
-        qemu_cond_wait(&qemu_io_proceeded_cond, &qemu_global_mutex);
     }
 
     qemu_wait_io_event_common(cpu);

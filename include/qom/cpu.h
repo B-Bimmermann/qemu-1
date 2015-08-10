@@ -249,8 +249,9 @@ struct kvm_run;
  * @mem_io_pc: Host Program Counter at which the memory was accessed.
  * @mem_io_vaddr: Target virtual address at which the memory was accessed.
  * @kvm_fd: vCPU file descriptor for KVM.
- * @work_mutex: Lock to prevent multiple access to queued_work_*.
+ * @work_mutex: Lock to prevent multiple access to queued_* qemu_work_item.
  * @queued_work_first: First asynchronous work pending.
+ * @queued_safe_work_first: First item of safe work pending.
  *
  * State of one CPU core or thread.
  */
@@ -606,7 +607,6 @@ void async_run_safe_work_on_cpu(CPUState *cpu, void (*func)(void *data),
 bool async_safe_work_pending(void);
 
 /**
-
  * qemu_get_cpu:
  * @index: The CPUState@cpu_index value of the CPU to obtain.
  *
