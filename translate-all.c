@@ -127,9 +127,7 @@ static void *l1_map[V_L1_SIZE];
 TCGContext tcg_ctx;
 
 /* translation block context */
-#ifdef CONFIG_USER_ONLY
 __thread int have_tb_lock;
-#endif
 
 void tb_lock(void)
 {
@@ -147,6 +145,17 @@ void tb_unlock(void)
     have_tb_lock--;
     qemu_mutex_unlock(&tcg_ctx.tb_ctx.tb_lock);
 #endif
+}
+
+bool tb_lock_recursive(void)
+{
+#ifdef CONFIG_USER_ONLY
+    if(have_tb_lock) {
+        return false;
+    }
+    tb_lock();
+#endif
+    return true;
 }
 
 void tb_lock_reset(void)

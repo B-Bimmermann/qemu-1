@@ -278,7 +278,23 @@ static TranslationBlock *tb_find_slow(CPUState *cpu,
     mmap_lock();
     tb_lock();
     tb = tb_find_physical(cpu, pc, cs_base, flags);
-    if (tb) {
+    if (!tb) {
+        /* mmap_lock is needed by tb_gen_code, and mmap_lock must be
+         * taken outside tb_lock.  tb_lock is released later in
+         * cpu_exec.
+         */
+        mmap_lock();
+        tb_lock();
+
+        /* Retry to get the TB in case a CPU just translate it to avoid having
+         * duplicated TB in the pool.
+         */
+        tb = tb_find_physical(cpu, pc, cs_base, flags);
+        if (!tb) {
+            /* if no translated code available, then translate it now */
+            cpu->tb_invalidated_flag = 0;
+            tb = tb_gen_code(cpu, pc, cs_base, flags, 0);
+        }
         mmap_unlock();
         goto found;
     }
@@ -369,7 +385,6 @@ int cpu_exec(CPUState *cpu)
         return 0;
     }
     current_cpu = cpu;
-    atomic_mb_set(&tcg_current_cpu, cpu);
     rcu_read_lock();
 
     cc->cpu_exec_enter(cpu);
@@ -559,11 +574,5 @@ int cpu_exec(CPUState *cpu)
     cc->cpu_exec_exit(cpu);
     rcu_read_unlock();
 
-    /* fail safe : never use current_cpu outside cpu_exec() */
-    current_cpu = NULL;
-
-    /* Does not need atomic_mb_set because a spurious wakeup is okay.  */
-    atomic_set(&tcg_current_cpu, NULL);
-    tcg_cpu_allow_execution(cpu);
     return ret;
 }
