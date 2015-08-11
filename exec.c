@@ -2452,6 +2452,7 @@ MemTxResult address_space_rw(AddressSpace *as, hwaddr addr, MemTxAttrs attrs,
                     abort();
                 }
             } else {
+                assert(qemu_mutex_iothread_locked());
                 addr1 += memory_region_get_ram_addr(mr);
                 /* RAM case */
                 ptr = qemu_get_ram_ptr(addr1);
@@ -2492,6 +2493,7 @@ MemTxResult address_space_rw(AddressSpace *as, hwaddr addr, MemTxAttrs attrs,
                     abort();
                 }
             } else {
+                assert(qemu_mutex_iothread_locked());
                 /* RAM case */
                 ptr = qemu_get_ram_ptr(mr->ram_addr + addr1);
                 memcpy(buf, ptr, l);
