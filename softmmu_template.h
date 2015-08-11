@@ -24,6 +24,7 @@
 #include "qemu/timer.h"
 #include "exec/address-spaces.h"
 #include "exec/memory.h"
+#include "qemu/main-loop.h"
 
 #define DATA_SIZE (1 << SHIFT)
 
@@ -149,10 +150,12 @@ static inline DATA_TYPE glue(io_read, SUFFIX)(CPUArchState *env,
 {
     uint64_t val;
     CPUState *cpu = ENV_GET_CPU(env);
-    hwaddr physaddr = iotlbentry->addr;
-    MemoryRegion *mr = iotlb_to_region(cpu, physaddr);
+    hwaddr physaddr;
+    MemoryRegion *mr;
 
-    physaddr = (physaddr & TARGET_PAGE_MASK) + addr;
+    qemu_mutex_lock_iothread();
+    mr = iotlb_to_region(cpu, iotlbentry->addr);
+    physaddr = (iotlbentry->addr & TARGET_PAGE_MASK) + addr;
     cpu->mem_io_pc = retaddr;
     if (mr != &io_mem_rom && mr != &io_mem_notdirty && !cpu->can_do_io) {
         cpu_io_recompile(cpu, retaddr);
@@ -161,6 +164,7 @@ static inline DATA_TYPE glue(io_read, SUFFIX)(CPUArchState *env,
     cpu->mem_io_vaddr = addr;
     memory_region_dispatch_read(mr, physaddr, &val, 1 << SHIFT,
                                 iotlbentry->attrs);
+    qemu_mutex_unlock_iothread();
     return val;
 }
 #endif
@@ -356,11 +360,18 @@ static inline void glue(io_write, SUFFIX)(CPUArchState *env,
                                           uintptr_t retaddr)
 {
     CPUState *cpu = ENV_GET_CPU(env);
-    hwaddr physaddr = iotlbentry->addr;
-    MemoryRegion *mr = iotlb_to_region(cpu, physaddr);
+    hwaddr physaddr;
+    MemoryRegion *mr;
 
+<<<<<<< f460a688077a1a35d81b599fa2ded95591926bbd
     physaddr = (physaddr & TARGET_PAGE_MASK) + addr;
     if (mr != &io_mem_rom && mr != &io_mem_notdirty && !cpu->can_do_io) {
+=======
+    qemu_mutex_lock_iothread();
+    mr = iotlb_to_region(cpu, iotlbentry->addr);
+    physaddr = (iotlbentry->addr & TARGET_PAGE_MASK) + addr;
+    if (mr != &io_mem_rom && mr != &io_mem_notdirty && !cpu_can_do_io(cpu)) {
+>>>>>>> Some qemu_global_mutex test.
         cpu_io_recompile(cpu, retaddr);
     }
 
@@ -368,6 +379,7 @@ static inline void glue(io_write, SUFFIX)(CPUArchState *env,
     cpu->mem_io_pc = retaddr;
     memory_region_dispatch_write(mr, physaddr, val, 1 << SHIFT,
                                  iotlbentry->attrs);
+    qemu_mutex_unlock_iothread();
 }
 
 void helper_le_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,

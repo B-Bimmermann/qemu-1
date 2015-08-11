@@ -863,7 +863,6 @@ static void qemu_kvm_init_cpu_signals(CPUState *cpu)
 
 static QemuMutex qemu_global_mutex;
 static QemuCond qemu_io_proceeded_cond;
-static unsigned iothread_requesting_mutex;
 
 static QemuThread io_thread;
 
@@ -1102,10 +1101,6 @@ static void qemu_tcg_wait_io_event(CPUState *cpu)
         qemu_cond_wait(cpu->halt_cond, &qemu_global_mutex);
     }
 
-    while (iothread_requesting_mutex) {
-        qemu_cond_wait(&qemu_io_proceeded_cond, &qemu_global_mutex);
-    }
-
     qemu_wait_io_event_common(cpu);
 }
 
@@ -1319,10 +1314,7 @@ void qemu_mutex_lock_iothread(void)
             qemu_cpu_kick_no_halt();
             qemu_mutex_lock(&qemu_global_mutex);
         }
-        atomic_dec(&iothread_requesting_mutex);
-        qemu_cond_broadcast(&qemu_io_proceeded_cond);
     }
-    iothread_locked = true;
 }
 
 void qemu_mutex_unlock_iothread(void)
@@ -1537,7 +1529,10 @@ static int tcg_cpu_exec(CPUState *cpu)
         cpu->icount_decr.u16.low = decr;
         cpu->icount_extra = count;
     }
+    qemu_mutex_unlock_iothread();
     ret = cpu_exec(cpu);
+    qemu_mutex_lock_iothread();
+
 #ifdef CONFIG_PROFILER
     tcg_time += profile_getclock() - ti;
 #endif
