@@ -1131,6 +1131,7 @@ MemTxResult memory_region_dispatch_read(MemoryRegion *mr,
 {
     MemTxResult r;
 
+    assert(qemu_mutex_iothread_locked());
     if (!memory_region_access_valid(mr, addr, size, false)) {
         *pval = unassigned_mem_read(mr, addr, size);
         return MEMTX_DECODE_ERROR;
@@ -1147,6 +1148,7 @@ MemTxResult memory_region_dispatch_write(MemoryRegion *mr,
                                          unsigned size,
                                          MemTxAttrs attrs)
 {
+    assert(qemu_mutex_iothread_locked());
     if (!memory_region_access_valid(mr, addr, size, true)) {
         unassigned_mem_write(mr, addr, data, size);
         return MEMTX_DECODE_ERROR;
