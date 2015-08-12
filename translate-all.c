@@ -319,6 +319,8 @@ bool cpu_restore_state(CPUState *cpu, uintptr_t retaddr)
 {
     TranslationBlock *tb;
 
+    tb_lock();
+
     tb = tb_find_pc(retaddr);
     if (tb) {
         cpu_restore_state_from_tb(cpu, tb, retaddr);
@@ -328,6 +330,7 @@ bool cpu_restore_state(CPUState *cpu, uintptr_t retaddr)
             tb_phys_invalidate(tb, -1);
             tb_free(tb);
         }
+        tb_unlock();
         return true;
     }
     return false;
@@ -811,8 +814,11 @@ void tb_free(TranslationBlock *tb)
 
 static inline void invalidate_page_bitmap(PageDesc *p)
 {
-    g_free(p->code_bitmap);
-    p->code_bitmap = NULL;
+    assert(tb_locked());
+    if (p->code_bitmap) {
+        g_free(p->code_bitmap);
+        p->code_bitmap = NULL;
+    }
     p->code_write_count = 0;
 }
 
@@ -1058,7 +1064,7 @@ static void tb_invalidate_jmp_remove(void *opaque)
     tb->jmp_first = (TranslationBlock *)((uintptr_t)tb | 2); /* fail safe */
 }
 
-/* invalidate one TB */
+/* Must be called with tb_lock held. */
 void tb_phys_invalidate(TranslationBlock *tb, tb_page_addr_t page_addr)
 {
     CPUState *cpu;
@@ -1067,7 +1073,7 @@ void tb_phys_invalidate(TranslationBlock *tb, tb_page_addr_t page_addr)
     tb_page_addr_t phys_pc;
     struct CPUDiscardTBParams *params;
 
-    tb_lock();
+    assert(tb_locked());
 
     /* remove the TB from the hash list */
     phys_pc = tb->page_addr[0] + (tb->pc & ~TARGET_PAGE_MASK);
@@ -1128,14 +1134,15 @@ void tb_phys_invalidate(TranslationBlock *tb, tb_page_addr_t page_addr)
 #endif /* MTTCG */
 
     tcg_ctx.tb_ctx.tb_phys_invalidate_count++;
-    tb_unlock();
 }
 
+/* Must be called with tb_lock held. */
 static void build_page_bitmap(PageDesc *p)
 {
     int n, tb_start, tb_end;
     TranslationBlock *tb;
 
+    assert(tb_locked());
     p->code_bitmap = bitmap_new(TARGET_PAGE_SIZE);
 
     tb = p->first_tb;
@@ -1322,6 +1329,8 @@ void tb_invalidate_phys_page_range(tb_page_addr_t start, tb_page_addr_t end,
     int current_flags = 0;
 #endif /* TARGET_HAS_PRECISE_SMC */
 
+    assert(tb_locked());
+
     p = page_find(start >> TARGET_PAGE_BITS);
     if (!p) {
         return;
@@ -1415,6 +1424,8 @@ void tb_invalidate_phys_page_fast(tb_page_addr_t start, int len)
 {
     PageDesc *p;
 
+    tb_lock();
+
 #if 0
     if (1) {
         qemu_log("modifying code at 0x%x size=%d EIP=%x PC=%08x\n",
@@ -1446,6 +1457,8 @@ void tb_invalidate_phys_page_fast(tb_page_addr_t start, int len)
     do_invalidate:
         tb_invalidate_phys_page_range(start, start + len, 1);
     }
+
+    tb_unlock();
 }
 
 #if !defined(CONFIG_SOFTMMU)
@@ -1624,14 +1637,15 @@ static void tb_link_page(TranslationBlock *tb, tb_page_addr_t phys_pc,
 }
 
 /* find the TB 'tb' such that tb[0].tc_ptr <= tc_ptr <
-   tb[1].tc_ptr. Return NULL if not found */
+ * tb[1].tc_ptr. Return NULL if not found.
+ * tb_lock must be held. */
 static TranslationBlock *tb_find_pc(uintptr_t tc_ptr)
 {
     int m_min, m_max, m;
     uintptr_t v;
     TranslationBlock *tb = NULL;
 
-    tb_lock();
+    assert(tb_locked());
 
     if ((tcg_ctx.tb_ctx.nb_tbs > 0)
     && (tc_ptr >= (uintptr_t)tcg_ctx.code_gen_buffer &&
@@ -1655,7 +1669,6 @@ static TranslationBlock *tb_find_pc(uintptr_t tc_ptr)
         tb = &tcg_ctx.tb_ctx.tbs[m_max];
     }
 
-    tb_unlock();
     return tb;
 }
 
@@ -1684,6 +1697,7 @@ void tb_check_watchpoint(CPUState *cpu)
 {
     TranslationBlock *tb;
 
+    tb_lock();
     tb = tb_find_pc(cpu->mem_io_pc);
     if (tb) {
         /* We can use retranslation to find the PC.  */
@@ -1701,6 +1715,7 @@ void tb_check_watchpoint(CPUState *cpu)
         addr = get_page_addr_code(env, pc);
         tb_invalidate_phys_range(addr, addr + 1);
     }
+    tb_unlock();
 }
 
 #ifndef CONFIG_USER_ONLY
