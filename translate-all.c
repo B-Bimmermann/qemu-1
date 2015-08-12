@@ -784,7 +784,7 @@ bool tcg_enabled(void)
  */
 static TranslationBlock *tb_alloc(target_ulong pc)
 {
-    TranslationBlock *tb = NULL;
+    TranslationBlock *tb;
 
     if (tcg_ctx.tb_ctx.nb_tbs >= tcg_ctx.code_gen_max_blocks) {
         return NULL;
@@ -1194,6 +1194,7 @@ TranslationBlock *tb_gen_code(CPUState *cpu,
  buffer_overflow:
         /* flush must be done */
         tb_flush_safe(cpu);
+        return NULL;
         /* cannot fail at this point */
         tb = tb_alloc(pc);
         assert(tb != NULL);
