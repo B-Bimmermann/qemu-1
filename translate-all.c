@@ -750,14 +750,12 @@ bool tcg_enabled(void)
  */
 static TranslationBlock *tb_alloc(target_ulong pc)
 {
-    TranslationBlock *tb = NULL;
+    TranslationBlock *tb;
 
     if (tcg_ctx.tb_ctx.nb_tbs >= tcg_ctx.code_gen_max_blocks ||
         (tcg_ctx.code_gen_ptr - tcg_ctx.code_gen_buffer) >=
          tcg_ctx.code_gen_buffer_max_size) {
-        tb = &tcg_ctx.tb_ctx.tbs[tcg_ctx.tb_ctx.nb_tbs++];
-        tb->pc = pc;
-        tb->cflags = 0;
+        return NULL;
     }
     tb = &tcg_ctx.tb_ctx.tbs[tcg_ctx.tb_ctx.nb_tbs++];
     tb->pc = pc;
@@ -1158,6 +1156,7 @@ TranslationBlock *tb_gen_code(CPUState *cpu,
     if (!tb) {
         /* flush must be done */
         tb_flush_safe(cpu);
+        return NULL;
         /* cannot fail at this point */
         tb = tb_alloc(pc);
         /* Don't forget to invalidate previous TB info.  */
