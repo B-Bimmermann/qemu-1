@@ -11073,7 +11073,8 @@ undef:
 
 /* generate intermediate code in gen_opc_buf and gen_opparam_buf for
    basic block 'tb'. If search_pc is TRUE, also generate PC
-   information for each intermediate instruction. */
+   information for each intermediate instruction.
+   This must be called with tb_lock held. */
 static inline void gen_intermediate_code_internal(ARMCPU *cpu,
                                                   TranslationBlock *tb,
                                                   bool search_pc)
@@ -11088,6 +11089,8 @@ static inline void gen_intermediate_code_internal(ARMCPU *cpu,
     int num_insns;
     int max_insns;
 
+    assert(tb_locked());
+
     /* generate intermediate code */
 
     /* The A64 decoder has its own top level loop, because it doesn't need
@@ -11101,8 +11104,6 @@ static inline void gen_intermediate_code_internal(ARMCPU *cpu,
     pc_start = tb->pc;
 
     dc->tb = tb;
-
-    tb_lock();
 
     dc->is_jmp = DISAS_NEXT;
     dc->pc = pc_start;
@@ -11444,7 +11445,6 @@ done_generating:
         tb->size = dc->pc - pc_start;
         tb->icount = num_insns;
     }
-    tb_unlock();
 }
 
 void gen_intermediate_code(CPUARMState *env, TranslationBlock *tb)

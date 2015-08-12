@@ -133,8 +133,14 @@ TCGContext tcg_ctx;
 /* translation block context */
 __thread volatile int have_tb_lock;
 
+bool tb_locked(void)
+{
+    return have_tb_lock;
+}
+
 void tb_lock(void)
 {
+    assert(!have_tb_lock);
     if (!have_tb_lock) {
         qemu_mutex_lock(&tcg_ctx.tb_ctx.tb_lock);
     }
@@ -1129,6 +1135,7 @@ static void build_page_bitmap(PageDesc *p)
     }
 }
 
+/* Must be called with tb_lock held. */
 TranslationBlock *tb_gen_code(CPUState *cpu,
                               target_ulong pc, target_ulong cs_base,
                               int flags, int cflags)
@@ -1139,7 +1146,7 @@ TranslationBlock *tb_gen_code(CPUState *cpu,
     target_ulong virt_page2;
     int code_gen_size;
 
-    tb_lock();
+    assert(have_tb_lock);
 
     phys_pc = get_page_addr_code(env, pc);
     if (use_icount) {
@@ -1170,7 +1177,6 @@ TranslationBlock *tb_gen_code(CPUState *cpu,
     }
     tb_link_page(tb, phys_pc, phys_page2);
 
-    tb_unlock();
     return tb;
 }
 
@@ -1469,14 +1475,13 @@ static inline void tb_alloc_page(TranslationBlock *tb,
 }
 
 /* add a new TB and link it to the physical page tables. phys_page2 is
- * (-1) to indicate that only one page contains the TB. */
+ * (-1) to indicate that only one page contains the TB.
+ * This must be called with tb_lock held. */
 static void tb_link_page(TranslationBlock *tb, tb_page_addr_t phys_pc,
                          tb_page_addr_t phys_page2)
 {
     unsigned int h;
     TranslationBlock **ptb;
-
-    tb_lock();
 
     /* Grab the mmap lock to stop another thread invalidating this TB
        before we are done.  */
@@ -1511,8 +1516,6 @@ static void tb_link_page(TranslationBlock *tb, tb_page_addr_t phys_pc,
     tb_page_check();
 #endif
     mmap_unlock();
-
-    tb_unlock();
 }
 
 /* find the TB 'tb' such that tb[0].tc_ptr <= tc_ptr <
