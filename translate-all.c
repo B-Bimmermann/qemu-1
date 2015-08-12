@@ -1122,7 +1122,8 @@ TranslationBlock *tb_gen_code(CPUState *cpu,
     if (unlikely(!tb)) {
  buffer_overflow:
         /* flush must be done */
-        tb_flush(cpu);
+        tb_flush_safe(cpu);
+        return NULL;
         /* cannot fail at this point */
         tb = tb_alloc(pc);
         assert(tb != NULL);
