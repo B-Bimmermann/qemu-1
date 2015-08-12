@@ -11145,8 +11145,17 @@ static bool insn_crosses_page(CPUARMState *env, DisasContext *s)
 }
 
 /* generate intermediate code in gen_opc_buf and gen_opparam_buf for
+<<<<<<< 0a842afc5aa09727a688f24c93c755c5aee48275
    basic block 'tb'.  */
 void gen_intermediate_code(CPUARMState *env, TranslationBlock *tb)
+=======
+   basic block 'tb'. If search_pc is TRUE, also generate PC
+   information for each intermediate instruction.
+   This must be called with tb_lock held. */
+static inline void gen_intermediate_code_internal(ARMCPU *cpu,
+                                                  TranslationBlock *tb,
+                                                  bool search_pc)
+>>>>>>> tb_lock: fix so it isn't recursive.
 {
     ARMCPU *cpu = arm_env_get_cpu(env);
     CPUState *cs = CPU(cpu);
@@ -11156,6 +11165,8 @@ void gen_intermediate_code(CPUARMState *env, TranslationBlock *tb)
     int num_insns;
     int max_insns;
     bool end_of_page;
+
+    assert(tb_locked());
 
     /* generate intermediate code */
 
@@ -11170,8 +11181,6 @@ void gen_intermediate_code(CPUARMState *env, TranslationBlock *tb)
     pc_start = tb->pc;
 
     dc->tb = tb;
-
-    tb_lock();
 
     dc->is_jmp = DISAS_NEXT;
     dc->pc = pc_start;
@@ -11524,8 +11533,30 @@ done_generating:
         qemu_log("\n");
     }
 #endif
+<<<<<<< 0a842afc5aa09727a688f24c93c755c5aee48275
     tb->size = dc->pc - pc_start;
     tb->icount = num_insns;
+=======
+    if (search_pc) {
+        j = tcg_op_buf_count();
+        lj++;
+        while (lj <= j)
+            tcg_ctx.gen_opc_instr_start[lj++] = 0;
+    } else {
+        tb->size = dc->pc - pc_start;
+        tb->icount = num_insns;
+    }
+}
+
+void gen_intermediate_code(CPUARMState *env, TranslationBlock *tb)
+{
+    gen_intermediate_code_internal(arm_env_get_cpu(env), tb, false);
+}
+
+void gen_intermediate_code_pc(CPUARMState *env, TranslationBlock *tb)
+{
+    gen_intermediate_code_internal(arm_env_get_cpu(env), tb, true);
+>>>>>>> tb_lock: fix so it isn't recursive.
 }
 
 static const char *cpu_mode_names[16] = {

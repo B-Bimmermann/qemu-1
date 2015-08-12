@@ -363,15 +363,12 @@ static inline void glue(io_write, SUFFIX)(CPUArchState *env,
     hwaddr physaddr;
     MemoryRegion *mr;
 
-<<<<<<< f460a688077a1a35d81b599fa2ded95591926bbd
     physaddr = (physaddr & TARGET_PAGE_MASK) + addr;
     if (mr != &io_mem_rom && mr != &io_mem_notdirty && !cpu->can_do_io) {
-=======
     qemu_mutex_lock_iothread();
     mr = iotlb_to_region(cpu, iotlbentry->addr);
     physaddr = (iotlbentry->addr & TARGET_PAGE_MASK) + addr;
     if (mr != &io_mem_rom && mr != &io_mem_notdirty && !cpu_can_do_io(cpu)) {
->>>>>>> Some qemu_global_mutex test.
         cpu_io_recompile(cpu, retaddr);
     }
 

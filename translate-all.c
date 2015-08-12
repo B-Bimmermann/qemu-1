@@ -132,6 +132,11 @@ TCGContext tcg_ctx;
 __thread int have_tb_lock;
 #endif
 
+bool tb_locked(void)
+{
+    return have_tb_lock;
+}
+
 void tb_lock(void)
 {
 #ifdef CONFIG_USER_ONLY
@@ -1170,7 +1175,7 @@ TranslationBlock *tb_gen_code(CPUState *cpu,
     int64_t ti;
 #endif
 
-    tb_lock();
+    assert(have_tb_lock);
 
     phys_pc = get_page_addr_code(env, pc);
     if (use_icount) {
@@ -1267,7 +1272,6 @@ TranslationBlock *tb_gen_code(CPUState *cpu,
     }
     tb_link_page(tb, phys_pc, phys_page2);
 
-    tb_unlock();
     return tb;
 }
 
@@ -1584,8 +1588,6 @@ static void tb_link_page(TranslationBlock *tb, tb_page_addr_t phys_pc,
     unsigned int h;
     TranslationBlock **ptb;
 
-    tb_lock();
-
     /* Grab the mmap lock to stop another thread invalidating this TB
        before we are done.  */
     mmap_lock();
@@ -1619,8 +1621,6 @@ static void tb_link_page(TranslationBlock *tb, tb_page_addr_t phys_pc,
     tb_page_check();
 #endif
     mmap_unlock();
-
-    tb_unlock();
 }
 
 /* find the TB 'tb' such that tb[0].tc_ptr <= tc_ptr <
