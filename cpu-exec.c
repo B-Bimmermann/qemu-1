@@ -388,6 +388,7 @@ int cpu_exec(CPUState *cpu)
 
     if (cpu->halted) {
         if (!cpu_has_work(cpu)) {
+            cpu->exit_request = 1;
             return EXCP_HALTED;
         }
 
