@@ -413,6 +413,7 @@ int cpu_exec(CPUState *cpu)
         }
 #endif
         if (!cpu_has_work(cpu)) {
+            cpu->exit_request = 1;
             return EXCP_HALTED;
         }
 
