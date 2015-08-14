@@ -425,20 +425,31 @@ void helper_le_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
              * exclusive-protected memory. */
             hwaddr hw_addr = (iotlbentry->addr & TARGET_PAGE_MASK) + addr;
 
+            qemu_mutex_lock(&tcg_excl_access_lock);
             /* The function lookup_and_reset_cpus_ll_addr could have reset the
              * exclusive address. Fail the SC in this case.
              * N.B.: Here excl_succeeded == 0 means that helper_le_st_name has
              * not been called by a softmmu_llsc_template.h. */
             if(env->excl_succeeded) {
-                if (env->excl_protected_range.begin != hw_addr) {
-                    /* The vCPU is SC-ing to an unprotected address. */
+                if (!((env->excl_protected_range.begin == hw_addr) &&
+                  env->excl_protected_range.end == (hw_addr + DATA_SIZE))) {
+                    /* The vCPU is SC-ing to an unprotected address. This
+                     * can also happen when a vCPU stores to the address.
+                     * */
                     env->excl_protected_range.begin = EXCLUSIVE_RESET_ADDR;
                     env->excl_succeeded = 0;
+
+                    qemu_mutex_unlock(&tcg_excl_access_lock);
 
                     return;
                 }
 
-                cpu_physical_memory_set_excl_dirty(hw_addr, ENV_GET_CPU(env)->cpu_index);
+                /* Now we are going for sure to complete the access. Set the
+                 * bit to dirty. This would not be necessary if it did not
+                 * exist the risk of forgetting the bit set after a complete
+                 * flush of the TLB. */
+                cpu_physical_memory_set_excl_dirty(hw_addr,
+                                                  ENV_GET_CPU(env)->cpu_index);
             }
 
             haddr = addr + env->tlb_table[mmu_idx][index].addend;
@@ -448,7 +459,10 @@ void helper_le_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
             glue(glue(st, SUFFIX), _le_p)((uint8_t *)haddr, val);
         #endif
 
+            /* This will reset the excl address also for the current vCPU. */
             lookup_and_reset_cpus_ll_addr(hw_addr, DATA_SIZE);
+
+            qemu_mutex_unlock(&tcg_excl_access_lock);
 
             return;
         } else {
@@ -539,20 +553,31 @@ void helper_be_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
              * exclusive-protected memory. */
             hwaddr hw_addr = (iotlbentry->addr & TARGET_PAGE_MASK) + addr;
 
+            qemu_mutex_lock(&tcg_excl_access_lock);
             /* The function lookup_and_reset_cpus_ll_addr could have reset the
              * exclusive address. Fail the SC in this case.
              * N.B.: Here excl_succeeded == 0 means that helper_le_st_name has
              * not been called by a softmmu_llsc_template.h. */
             if(env->excl_succeeded) {
-                if (env->excl_protected_range.begin != hw_addr) {
-                    /* The vCPU is SC-ing to an unprotected address. */
+                if (!((env->excl_protected_range.begin == hw_addr) &&
+                  env->excl_protected_range.end == (hw_addr + DATA_SIZE))) {
+                    /* The vCPU is SC-ing to an unprotected address. This
+                     * can also happen when a vCPU stores to the address.
+                     * */
                     env->excl_protected_range.begin = EXCLUSIVE_RESET_ADDR;
                     env->excl_succeeded = 0;
+
+                    qemu_mutex_unlock(&tcg_excl_access_lock);
 
                     return;
                 }
 
-                cpu_physical_memory_set_excl_dirty(hw_addr, ENV_GET_CPU(env)->cpu_index);
+                /* Now we are going for sure to complete the access. Set the
+                 * bit to dirty. This would not be necessary if it did not
+                 * exist the risk of forgetting the bit set after a complete
+                 * flush of the TLB. */
+                cpu_physical_memory_set_excl_dirty(hw_addr,
+                                                  ENV_GET_CPU(env)->cpu_index);
             }
 
             haddr = addr + env->tlb_table[mmu_idx][index].addend;
@@ -562,7 +587,10 @@ void helper_be_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
             glue(glue(st, SUFFIX), _le_p)((uint8_t *)haddr, val);
         #endif
 
+            /* This will reset the excl address also for the current vCPU. */
             lookup_and_reset_cpus_ll_addr(hw_addr, DATA_SIZE);
+
+            qemu_mutex_unlock(&tcg_excl_access_lock);
 
             return;
         } else {
