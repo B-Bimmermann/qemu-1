@@ -79,13 +79,27 @@ static void tlb_flush_async_work(void *opaque)
     struct TLBFlushParams *params = opaque;
 
     tlb_flush(params->cpu, params->flush_global);
+    atomic_set(&params->cpu->pending_tlb_flush, 0);
+
     g_free(params);
+}
+
+void tlb_query_flush_cpu(CPUState *cpu, int flush_global) {
+    struct TLBFlushParams *params;
+
+    if (!atomic_read(&cpu->pending_tlb_flush)) {
+        params = g_malloc(sizeof(struct TLBFlushParams));
+        params->cpu = cpu;
+        params->flush_global = flush_global;
+
+        atomic_set(&cpu->pending_tlb_flush, 1);
+        async_run_on_cpu(cpu, tlb_flush_async_work, params);
+    }
 }
 
 void tlb_flush_all(int flush_global)
 {
     CPUState *cpu;
-    struct TLBFlushParams *params;
 
 #if 0 /* MTTCG */
     CPU_FOREACH(cpu) {
@@ -99,10 +113,7 @@ void tlb_flush_all(int flush_global)
              */
             tlb_flush(cpu, flush_global);
         } else {
-            params = g_malloc(sizeof(struct TLBFlushParams));
-            params->cpu = cpu;
-            params->flush_global = flush_global;
-            async_run_on_cpu(cpu, tlb_flush_async_work, params);
+            tlb_query_flush_cpu(cpu, flush_global);
         }
     }
 #endif /* MTTCG */
