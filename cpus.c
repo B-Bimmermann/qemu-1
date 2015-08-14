@@ -934,7 +934,9 @@ void async_run_on_cpu(CPUState *cpu, void (*func)(void *data), void *data)
     wi->done = false;
     qemu_mutex_unlock(&cpu->work_mutex);
 
-    qemu_cpu_kick(cpu);
+    if (tcg_enabled() && (atomic_read(&cpu->tcg_exec_flag) == 1)) {
+        qemu_cpu_kick(cpu);
+    }
 }
 
 void async_run_safe_work_on_cpu(CPUState *cpu, void (*func)(void *data),
