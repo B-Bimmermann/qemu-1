@@ -36,6 +36,10 @@
 /* statistics */
 int tlb_flush_count;
 
+/* For atomic instruction handling. */
+int exit_flush_request = 0;
+QemuMutex tcg_excl_access_lock;
+
 /* NOTE:
  * If flush_global is true (the usual case), flush all tlb entries.
  * If flush_global is false, flush (at least) all tlb entries not
