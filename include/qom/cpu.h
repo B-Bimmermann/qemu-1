@@ -308,6 +308,10 @@ struct CPUState {
 
     void *opaque;
 
+    /* True if the CPU has a pending request for a TLB flush. While this value
+     * is true, any flush request will be ignored. */
+    int pending_tlb_flush;
+
     /* In order to avoid passing too many arguments to the MMIO helpers,
      * we store some rarely used information in the CPU context.
      */
