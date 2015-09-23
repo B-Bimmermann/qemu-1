@@ -1124,3 +1124,97 @@ uint32_t HELPER(ror_cc)(CPUARMState *env, uint32_t x, uint32_t i)
         return ((uint32_t)x >> shift) | (x << (32 - shift));
     }
 }
+
+/* LoadLink helpers, only unsigned. */
+static void * const qemu_ldex_helpers[16] = {
+    [MO_UB]   = helper_ret_ldlinkub_mmu,
+
+    [MO_LEUW] = helper_le_ldlinkuw_mmu,
+    [MO_LEUL] = helper_le_ldlinkul_mmu,
+    [MO_LEQ]  = helper_le_ldlinkq_mmu,
+
+    [MO_BEUW] = helper_be_ldlinkuw_mmu,
+    [MO_BEUL] = helper_be_ldlinkul_mmu,
+    [MO_BEQ]  = helper_be_ldlinkq_mmu,
+};
+
+#define LDEX_HELPER(SUFF, OPC)                                          \
+uint32_t HELPER(ldlink_aa32_i##SUFF)(CPUARMState *env, uint32_t addr,   \
+                                                       uint32_t index)  \
+{                                                                       \
+    CPUArchState *state = env;                                          \
+    TCGMemOpIdx op;                                                     \
+                                                                        \
+    op = make_memop_idx(OPC, index);                                    \
+                                                                        \
+    tcg_target_ulong (*func)(CPUArchState *env, target_ulong addr,      \
+                             TCGMemOpIdx oi, uintptr_t retaddr);        \
+    func = qemu_ldex_helpers[OPC];                                      \
+                                                                        \
+    return (uint32_t)func(state, addr, op, GETRA());                    \
+}
+
+LDEX_HELPER(8, MO_UB)
+LDEX_HELPER(16, MO_TEUW)
+LDEX_HELPER(32, MO_TEUL)
+
+uint64_t HELPER(ldlink_aa32_i64)(CPUARMState *env, uint32_t addr,
+                                                   uint32_t index)
+{
+    CPUArchState *state = env;
+    TCGMemOpIdx op;
+
+    op = make_memop_idx(MO_TEQ, index);
+
+    uint64_t (*func)(CPUArchState *env, target_ulong addr,
+                             TCGMemOpIdx oi, uintptr_t retaddr);
+    func = qemu_ldex_helpers[MO_TEQ];
+
+    return func(state, addr, op, GETRA());
+}
+
+/* StoreConditional helpers. Use the macro below to access them. */
+static void * const qemu_stex_helpers[16] = {
+    [MO_UB]   = helper_ret_stcondb_mmu,
+    [MO_LEUW] = helper_le_stcondw_mmu,
+    [MO_LEUL] = helper_le_stcondl_mmu,
+    [MO_LEQ]  = helper_le_stcondq_mmu,
+    [MO_BEUW] = helper_be_stcondw_mmu,
+    [MO_BEUL] = helper_be_stcondl_mmu,
+    [MO_BEQ]  = helper_be_stcondq_mmu,
+};
+
+#define STEX_HELPER(SUFF, DATA_TYPE, OPC)                               \
+uint32_t HELPER(stcond_aa32_i##SUFF)(CPUARMState *env, uint32_t addr,   \
+                                     uint32_t val, uint32_t index)      \
+{                                                                       \
+    CPUArchState *state = env;                                          \
+    TCGMemOpIdx op;                                                     \
+                                                                        \
+    op = make_memop_idx(OPC, index);                                    \
+                                                                        \
+    tcg_target_ulong (*func)(CPUArchState *env, target_ulong addr,      \
+                DATA_TYPE val, TCGMemOpIdx oi, uintptr_t retaddr);      \
+    func = qemu_stex_helpers[OPC];                                      \
+                                                                        \
+    return (uint32_t)func(state, addr, val, op, GETRA());               \
+}
+
+STEX_HELPER(8, uint8_t, MO_UB)
+STEX_HELPER(16, uint16_t, MO_TEUW)
+STEX_HELPER(32, uint32_t, MO_TEUL)
+
+uint32_t HELPER(stcond_aa32_i64)(CPUARMState *env, uint32_t addr,
+                                 uint64_t val, uint32_t index)
+{
+    CPUArchState *state = env;
+    TCGMemOpIdx op;
+
+    op = make_memop_idx(MO_TEQ, index);
+
+    tcg_target_ulong (*func)(CPUArchState *env, target_ulong addr,
+                 uint64_t val, TCGMemOpIdx oi, uintptr_t retaddr);
+    func = qemu_stex_helpers[MO_TEQ];
+
+    return (uint32_t)func(state, addr, val, op, GETRA());
+}
