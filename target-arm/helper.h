@@ -534,6 +534,16 @@ DEF_HELPER_4(atomic_cmpxchg64, i32, env, i32, i64, i32)
 DEF_HELPER_1(atomic_clear, void, env)
 DEF_HELPER_3(atomic_claim, void, env, i32, i64)
 
+DEF_HELPER_3(ldlink_aa32_i8, i32, env, i32, i32)
+DEF_HELPER_3(ldlink_aa32_i16, i32, env, i32, i32)
+DEF_HELPER_3(ldlink_aa32_i32, i32, env, i32, i32)
+DEF_HELPER_3(ldlink_aa32_i64, i64, env, i32, i32)
+
+DEF_HELPER_4(stcond_aa32_i8, i32, env, i32, i32, i32)
+DEF_HELPER_4(stcond_aa32_i16, i32, env, i32, i32, i32)
+DEF_HELPER_4(stcond_aa32_i32, i32, env, i32, i32, i32)
+DEF_HELPER_4(stcond_aa32_i64, i32, env, i32, i64, i32)
+
 #ifdef TARGET_AARCH64
 #include "helper-a64.h"
 #endif
