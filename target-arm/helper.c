@@ -16,7 +16,7 @@
 #include <zlib.h> /* For crc32 */
 #include "exec/semihost.h"
 #include "sysemu/kvm.h"
- 
+#include "qsim-context.h"
 #define ARM_CPU_FREQ 1000000000 /* FIXME: 1 GHz, should be configurable */
 
 #ifndef CONFIG_USER_ONLY
@@ -1061,9 +1061,40 @@ void pmccntr_sync(CPUARMState *env)
     }
 }
 
+extern bool qsim_gen_callbacks;
+extern bool qsim_sys_callbacks;
+extern magic_cb_t qsim_magic_cb;
+extern uint64_t qsim_tpid;
+extern int qsim_id;
+
+extern qsim_ucontext_t main_context;
+extern qsim_ucontext_t qemu_context;
+
 static void pmcr_write(CPUARMState *env, const ARMCPRegInfo *ri,
                        uint64_t value)
 {
+	ARMCPU *cpu = arm_env_get_cpu(env);
+	CPUState *cs = CPU(cpu);
+
+	qsim_id = cs->cpu_index;
+	if (value == 0xaaaaaaaa) { // start
+		qsim_tpid = extract64(env->cp15.contextidr_el[1], 0, 32);
+		tb_flush(cs);
+		qsim_gen_callbacks = true;
+
+		printf("Enabling callback generation ");
+		if (qsim_sys_callbacks)
+			printf("systemwide.\n");
+		else
+			printf("for pid %ld.\n", qsim_tpid);
+	} else if (value == 0xfa11dead) {
+		tb_flush(cs);
+		qsim_gen_callbacks = false;
+	}
+
+    if (qsim_magic_cb && qsim_magic_cb(qsim_id, value))
+      swapcontext(&qemu_context, &main_context);
+
     pmccntr_sync(env);
 
     if (value & PMCRC) {
