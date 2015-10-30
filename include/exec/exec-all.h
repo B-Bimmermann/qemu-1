@@ -108,6 +108,7 @@ void tlb_flush_page(CPUState *cpu, target_ulong addr);
  * In practice QEMU does not implement any global/not global flag for
  * TLB entries, and the argument is ignored.
  */
+void tlb_flush(CPUState *cpu, int flush_global);
 void tlb_query_flush_cpu(CPUState *cpu, int flush_global);
 void tlb_flush_all(int flush_global);
 /**

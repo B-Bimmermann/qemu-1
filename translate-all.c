@@ -134,7 +134,11 @@ __thread int have_tb_lock;
 
 bool tb_locked(void)
 {
+#ifdef CONFIG_USER_ONLY
     return have_tb_lock;
+#else
+    return true;
+#endif
 }
 
 void tb_lock(void)

@@ -286,9 +286,6 @@ struct CPUState {
     int64_t icount_extra;
     sigjmp_buf jmp_env;
 
-    QemuMutex work_mutex;
-    struct qemu_work_item *queued_work_first, *queued_work_last;
-
     CPUAddressSpace *cpu_ases;
     AddressSpace *as;
 
@@ -343,6 +340,7 @@ struct CPUState {
        (absolute value) offset as small as possible.  This reduces code
        size, especially for hosts without large memory offsets.  */
     uint32_t tcg_exit_req;
+    uint32_t tcg_exec_flag;
 };
 
 QTAILQ_HEAD(CPUTailQ, CPUState);

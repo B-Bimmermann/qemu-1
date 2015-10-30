@@ -1236,25 +1236,6 @@ static void *qemu_tcg_cpu_thread_fn(void *arg)
     return NULL;
 }
 
-static void qemu_cpu_kick_thread(CPUState *cpu)
-{
-#ifndef _WIN32
-    int err;
-
-    if (cpu->thread_kicked) {
-        return;
-    }
-    cpu->thread_kicked = true;
-    err = pthread_kill(cpu->thread->thread, SIG_IPI);
-    if (err) {
-        fprintf(stderr, "qemu:%s: %s", __func__, strerror(err));
-        exit(1);
-    }
-#else /* _WIN32 */
-    abort();
-#endif
-}
-
 static void qemu_cpu_kick_no_halt(void)
 {
     CPUState *cpu;
