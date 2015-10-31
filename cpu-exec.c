@@ -345,6 +345,11 @@ int cpu_exec(CPUState *cpu)
     uintptr_t next_tb;
     SyncClocks sc;
 
+    if (async_safe_work_pending()) {
+        cpu->exit_request = 1;
+        return 0;
+    }
+
     if (cpu->halted) {
 #if defined(TARGET_I386) && !defined(CONFIG_USER_ONLY)
         if (cpu->interrupt_request & CPU_INTERRUPT_POLL) {
