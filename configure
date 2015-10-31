@@ -1399,6 +1399,13 @@ if test "$ARCH" = "unknown"; then
     fi
 fi
 
+# Use the slow-path for atomic instructions if the softmmu is enabled
+if test "$softmmu" = "yes"; then
+    tcg_use_ldst_excl="yes"
+else
+    tcg_use_ldst_excl="no"
+fi
+
 # Consult white-list to determine whether to enable werror
 # by default.  Only enable by default for git builds
 z_version=`cut -f3 -d. $source_path/VERSION`
@@ -4734,6 +4741,7 @@ echo "Install blobs     $blobs"
 echo "KVM support       $kvm"
 echo "RDMA support      $rdma"
 echo "TCG interpreter   $tcg_interpreter"
+echo "use ld/st excl    $tcg_use_ldst_excl"
 echo "fdt support       $fdt"
 echo "preadv support    $preadv"
 echo "fdatasync         $fdatasync"
@@ -5125,6 +5133,9 @@ if test "$signalfd" = "yes" ; then
 fi
 if test "$tcg_interpreter" = "yes" ; then
   echo "CONFIG_TCG_INTERPRETER=y" >> $config_host_mak
+fi
+if test "$tcg_use_ldst_excl" = "yes" ; then
+  echo "CONFIG_TCG_USE_LDST_EXCL=y" >> $config_host_mak
 fi
 if test "$fdatasync" = "yes" ; then
   echo "CONFIG_FDATASYNC=y" >> $config_host_mak
