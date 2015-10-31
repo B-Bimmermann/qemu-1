@@ -611,13 +611,19 @@ static inline void *tcg_malloc(int size)
 {
     TCGContext *s = &tcg_ctx;
     uint8_t *ptr, *ptr_end;
+    void *ret;
+
+    tb_lock();
     size = (size + sizeof(long) - 1) & ~(sizeof(long) - 1);
     ptr = s->pool_cur;
     ptr_end = ptr + size;
     if (unlikely(ptr_end > s->pool_end)) {
-        return tcg_malloc_internal(&tcg_ctx, size);
+        ret = tcg_malloc_internal(&tcg_ctx, size);
+        tb_unlock();
+        return ret;
     } else {
         s->pool_cur = ptr_end;
+        tb_unlock();
         return ptr;
     }
 }
