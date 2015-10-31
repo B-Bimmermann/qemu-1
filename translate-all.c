@@ -1317,6 +1317,7 @@ void tb_invalidate_phys_page_range(tb_page_addr_t start, tb_page_addr_t end,
 #endif
 #ifdef TARGET_HAS_PRECISE_SMC
     if (current_tb_modified) {
+        qemu_mutex_unlock_iothread();
         /* we generate a block containing just the instruction
            modifying the memory. It will ensure that it cannot modify
            itself */
@@ -1422,6 +1423,7 @@ static void tb_invalidate_phys_page(tb_page_addr_t addr,
     p->first_tb = NULL;
 #ifdef TARGET_HAS_PRECISE_SMC
     if (current_tb_modified) {
+        qemu_mutex_unlock_iothread();
         /* we generate a block containing just the instruction
            modifying the memory. It will ensure that it cannot modify
            itself */
