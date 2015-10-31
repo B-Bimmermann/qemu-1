@@ -11235,6 +11235,8 @@ void gen_intermediate_code(CPUARMState *env, TranslationBlock *tb)
 
     dc->tb = tb;
 
+    tb_lock();
+
     dc->is_jmp = DISAS_NEXT;
     dc->pc = pc_start;
     dc->singlestep_enabled = cs->singlestep_enabled;
@@ -11588,6 +11590,8 @@ done_generating:
 #endif
     tb->size = dc->pc - pc_start;
     tb->icount = num_insns;
+
+    tb_unlock();
 }
 
 static const char *cpu_mode_names[16] = {
