@@ -30,9 +30,6 @@
 #include "exec/ram_addr.h"
 #include "tcg/tcg.h"
 
-void qemu_mutex_lock_iothread(void);
-void qemu_mutex_unlock_iothread(void);
-
 //#define DEBUG_TLB
 //#define DEBUG_TLB_CHECK
 
