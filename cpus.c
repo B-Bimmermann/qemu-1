@@ -147,6 +147,8 @@ typedef struct TimersState {
 } TimersState;
 
 static TimersState timers_state;
+/* CPU associated to this thread. */
+static __thread CPUState *tcg_thread_cpu;
 
 int64_t cpu_get_icount_raw(void)
 {
@@ -1210,6 +1212,7 @@ static void *qemu_tcg_cpu_thread_fn(void *arg)
     rcu_register_thread();
 
     qemu_mutex_lock_iothread();
+    tcg_thread_cpu = cpu;
     qemu_thread_get_self(cpu->thread);
 
     CPU_FOREACH(cpu) {
@@ -1230,7 +1233,7 @@ static void *qemu_tcg_cpu_thread_fn(void *arg)
     }
 
     /* process any pending work */
-    atomic_mb_set(&exit_request, 1);
+    first_cpu->exit_request = 1;
 
     while (1) {
         tcg_exec_all();
@@ -1254,7 +1257,7 @@ static void qemu_cpu_kick_no_halt(void)
     /* Ensure whatever caused the exit has reached the CPU threads before
      * writing exit_request.
      */
-    atomic_mb_set(&exit_request, 1);
+    first_cpu->exit_request = 1;
     cpu = atomic_mb_read(&tcg_current_cpu);
     if (cpu) {
         cpu_exit(cpu);
@@ -1547,7 +1550,8 @@ static void tcg_exec_all(void)
     if (next_cpu == NULL) {
         next_cpu = first_cpu;
     }
-    for (; next_cpu != NULL && !exit_request; next_cpu = CPU_NEXT(next_cpu)) {
+    for (; next_cpu != NULL && !first_cpu->exit_request;
+           next_cpu = CPU_NEXT(next_cpu)) {
         CPUState *cpu = next_cpu;
 
         qemu_clock_enable(QEMU_CLOCK_VIRTUAL,
@@ -1564,8 +1568,7 @@ static void tcg_exec_all(void)
         }
     }
 
-    /* Pairs with smp_wmb in qemu_cpu_kick.  */
-    atomic_mb_set(&exit_request, 0);
+    first_cpu->exit_request = 0;
 }
 
 void list_cpus(FILE *f, fprintf_function cpu_fprintf, const char *optarg)

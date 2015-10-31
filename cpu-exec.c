@@ -372,10 +372,6 @@ int cpu_exec(CPUState *cpu)
     atomic_mb_set(&tcg_current_cpu, cpu);
     rcu_read_lock();
 
-    if (unlikely(atomic_mb_read(&exit_request))) {
-        cpu->exit_request = 1;
-    }
-
     cc->cpu_exec_enter(cpu);
 
     /* Calculate difference between guest clock and host clock.
@@ -464,7 +460,6 @@ int cpu_exec(CPUState *cpu)
                     }
                 }
                 if (unlikely(cpu->exit_request)) {
-                    cpu->exit_request = 0;
                     cpu->exception_index = EXCP_INTERRUPT;
                     cpu_loop_exit(cpu);
                 }
