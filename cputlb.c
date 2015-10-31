@@ -30,6 +30,9 @@
 #include "exec/ram_addr.h"
 #include "tcg/tcg.h"
 
+void qemu_mutex_lock_iothread(void);
+void qemu_mutex_unlock_iothread(void);
+
 //#define DEBUG_TLB
 //#define DEBUG_TLB_CHECK
 
@@ -222,8 +225,10 @@ void tlb_flush_page_by_mmuidx(CPUState *cpu, target_ulong addr, ...)
    can be detected */
 void tlb_protect_code(ram_addr_t ram_addr)
 {
+    qemu_mutex_lock_iothread();
     cpu_physical_memory_test_and_clear_dirty(ram_addr, TARGET_PAGE_SIZE,
                                              DIRTY_MEMORY_CODE);
+    qemu_mutex_unlock_iothread();
 }
 
 /* update the TLB so that writes in physical page 'phys_addr' are no longer
