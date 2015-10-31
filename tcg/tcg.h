@@ -603,6 +603,7 @@ void *tcg_malloc_internal(TCGContext *s, int size);
 void tcg_pool_reset(TCGContext *s);
 void tcg_pool_delete(TCGContext *s);
 
+bool tb_locked(void);
 void tb_lock(void);
 void tb_unlock(void);
 void tb_lock_reset(void);
@@ -614,17 +615,15 @@ static inline void *tcg_malloc(int size)
     uint8_t *ptr, *ptr_end;
     void *ret;
 
-    tb_lock();
+    assert(tb_locked());
     size = (size + sizeof(long) - 1) & ~(sizeof(long) - 1);
     ptr = s->pool_cur;
     ptr_end = ptr + size;
     if (unlikely(ptr_end > s->pool_end)) {
         ret = tcg_malloc_internal(&tcg_ctx, size);
-        tb_unlock();
         return ret;
     } else {
         s->pool_cur = ptr_end;
-        tb_unlock();
         return ptr;
     }
 }

@@ -129,43 +129,40 @@ TCGContext tcg_ctx;
 /* translation block context */
 __thread int have_tb_lock;
 
+bool tb_locked(void)
+{
+    return have_tb_lock;
+}
+
 void tb_lock(void)
 {
-#ifdef CONFIG_USER_ONLY
     assert(!have_tb_lock);
     qemu_mutex_lock(&tcg_ctx.tb_ctx.tb_lock);
     have_tb_lock++;
-#endif
 }
 
 void tb_unlock(void)
 {
-#ifdef CONFIG_USER_ONLY
     assert(have_tb_lock);
     have_tb_lock--;
     qemu_mutex_unlock(&tcg_ctx.tb_ctx.tb_lock);
-#endif
 }
 
 bool tb_lock_recursive(void)
 {
-#ifdef CONFIG_USER_ONLY
     if(have_tb_lock) {
         return false;
     }
     tb_lock();
-#endif
     return true;
 }
 
 void tb_lock_reset(void)
 {
-#ifdef CONFIG_USER_ONLY
     if (have_tb_lock) {
         qemu_mutex_unlock(&tcg_ctx.tb_ctx.tb_lock);
         have_tb_lock = 0;
     }
-#endif
 }
 
 static void tb_link_page(TranslationBlock *tb, tb_page_addr_t phys_pc,
@@ -277,10 +274,11 @@ static int cpu_restore_state_from_tb(CPUState *cpu, TranslationBlock *tb,
     int64_t ti = profile_getclock();
 #endif
 
+    assert(tb_locked());
+
     if (searched_pc < host_pc) {
         return -1;
     }
-    tb_lock();
 
     /* Reconstruct the stored insn data while looking for the point at
        which the end of the insn exceeds the searched_pc.  */
@@ -293,7 +291,6 @@ static int cpu_restore_state_from_tb(CPUState *cpu, TranslationBlock *tb,
             goto found;
         }
     }
-    tb_unlock();
     return -1;
 
  found:
@@ -311,13 +308,14 @@ static int cpu_restore_state_from_tb(CPUState *cpu, TranslationBlock *tb,
     tcg_ctx.restore_time += profile_getclock() - ti;
     tcg_ctx.restore_count++;
 #endif
-    tb_unlock();
     return 0;
 }
 
 bool cpu_restore_state(CPUState *cpu, uintptr_t retaddr)
 {
     TranslationBlock *tb;
+
+    tb_lock();
 
     tb = tb_find_pc(retaddr);
     if (tb) {
@@ -328,8 +326,11 @@ bool cpu_restore_state(CPUState *cpu, uintptr_t retaddr)
             tb_phys_invalidate(tb, -1);
             tb_free(tb);
         }
+        tb_unlock();
         return true;
     }
+
+    tb_unlock();
     return false;
 }
 
@@ -849,8 +850,6 @@ static void page_flush_tb(void)
 /* XXX: tb_flush is currently not thread safe */
 void tb_flush(CPUState *cpu)
 {
-    tb_lock();
-
 #if defined(DEBUG_FLUSH)
     printf("qemu: flush code_size=%ld nb_tbs=%d avg_tb_size=%ld\n",
            (unsigned long)(tcg_ctx.code_gen_ptr - tcg_ctx.code_gen_buffer),
@@ -875,8 +874,6 @@ void tb_flush(CPUState *cpu)
     /* XXX: flush processor icache at this point if cache flush is
        expensive */
     tcg_ctx.tb_ctx.tb_flush_count++;
-
-    tb_unlock();
 }
 
 #ifdef DEBUG_TB_CHECK
@@ -1004,7 +1001,7 @@ void tb_phys_invalidate(TranslationBlock *tb, tb_page_addr_t page_addr)
     tb_page_addr_t phys_pc;
     TranslationBlock *tb1, *tb2;
 
-    tb_lock();
+    assert(tb_locked());
 
     /* remove the TB from the hash list */
     phys_pc = tb->page_addr[0] + (tb->pc & ~TARGET_PAGE_MASK);
@@ -1053,7 +1050,6 @@ void tb_phys_invalidate(TranslationBlock *tb, tb_page_addr_t page_addr)
     tb->jmp_first = (TranslationBlock *)((uintptr_t)tb | 2); /* fail safe */
 
     tcg_ctx.tb_ctx.tb_phys_invalidate_count++;
-    tb_unlock();
 }
 
 static void build_page_bitmap(PageDesc *p)
@@ -1100,7 +1096,7 @@ TranslationBlock *tb_gen_code(CPUState *cpu,
     int64_t ti;
 #endif
 
-    tb_lock();
+    assert(have_tb_lock);
 
     phys_pc = get_page_addr_code(env, pc);
     if (use_icount) {
@@ -1197,7 +1193,6 @@ TranslationBlock *tb_gen_code(CPUState *cpu,
     }
     tb_link_page(tb, phys_pc, phys_page2);
 
-    tb_unlock();
     return tb;
 }
 
@@ -1247,6 +1242,8 @@ void tb_invalidate_phys_page_range(tb_page_addr_t start, tb_page_addr_t end,
     target_ulong current_cs_base = 0;
     int current_flags = 0;
 #endif /* TARGET_HAS_PRECISE_SMC */
+
+    assert(tb_locked());
 
     p = page_find(start >> TARGET_PAGE_BITS);
     if (!p) {
@@ -1342,6 +1339,8 @@ void tb_invalidate_phys_page_fast(tb_page_addr_t start, int len)
 {
     PageDesc *p;
 
+    tb_lock();
+
 #if 0
     if (1) {
         qemu_log("modifying code at 0x%x size=%d EIP=%x PC=%08x\n",
@@ -1373,6 +1372,8 @@ void tb_invalidate_phys_page_fast(tb_page_addr_t start, int len)
     do_invalidate:
         tb_invalidate_phys_page_range(start, start + len, 1);
     }
+
+    tb_unlock();
 }
 
 #if !defined(CONFIG_SOFTMMU)
@@ -1516,8 +1517,6 @@ static void tb_link_page(TranslationBlock *tb, tb_page_addr_t phys_pc,
     unsigned int h;
     TranslationBlock **ptb;
 
-    tb_lock();
-
     /* add in the physical hash table */
     h = tb_phys_hash_func(phys_pc);
     ptb = &tcg_ctx.tb_ctx.tb_phys_hash[h];
@@ -1547,8 +1546,6 @@ static void tb_link_page(TranslationBlock *tb, tb_page_addr_t phys_pc,
 #ifdef DEBUG_TB_CHECK
     tb_page_check();
 #endif
-
-    tb_unlock();
 }
 
 /* find the TB 'tb' such that tb[0].tc_ptr <= tc_ptr <
@@ -1559,7 +1556,7 @@ static TranslationBlock *tb_find_pc(uintptr_t tc_ptr)
     uintptr_t v;
     TranslationBlock *tb;
 
-    tb_lock();
+    assert(tb_locked());
 
     if (tcg_ctx.tb_ctx.nb_tbs <= 0) {
         return NULL;
@@ -1583,10 +1580,8 @@ static TranslationBlock *tb_find_pc(uintptr_t tc_ptr)
             m_min = m + 1;
         }
     }
-    tb = &tcg_ctx.tb_ctx.tbs[m_max];
 
-    tb_unlock();
-    return tb;
+    return &tcg_ctx.tb_ctx.tbs[m_max];
 }
 
 #if !defined(CONFIG_USER_ONLY)
@@ -1614,6 +1609,7 @@ void tb_check_watchpoint(CPUState *cpu)
 {
     TranslationBlock *tb;
 
+    tb_lock();
     tb = tb_find_pc(cpu->mem_io_pc);
     if (tb) {
         /* We can use retranslation to find the PC.  */
@@ -1631,6 +1627,7 @@ void tb_check_watchpoint(CPUState *cpu)
         addr = get_page_addr_code(env, pc);
         tb_invalidate_phys_range(addr, addr + 1);
     }
+    tb_unlock();
 }
 
 #ifndef CONFIG_USER_ONLY

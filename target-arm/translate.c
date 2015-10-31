@@ -11221,6 +11221,8 @@ void gen_intermediate_code(CPUARMState *env, TranslationBlock *tb)
     int max_insns;
     bool end_of_page;
 
+    assert(tb_locked());
+
     /* generate intermediate code */
 
     /* The A64 decoder has its own top level loop, because it doesn't need
@@ -11234,8 +11236,6 @@ void gen_intermediate_code(CPUARMState *env, TranslationBlock *tb)
     pc_start = tb->pc;
 
     dc->tb = tb;
-
-    tb_lock();
 
     dc->is_jmp = DISAS_NEXT;
     dc->pc = pc_start;
@@ -11590,8 +11590,6 @@ done_generating:
 #endif
     tb->size = dc->pc - pc_start;
     tb->icount = num_insns;
-
-    tb_unlock();
 }
 
 static const char *cpu_mode_names[16] = {
