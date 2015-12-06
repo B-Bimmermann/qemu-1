@@ -461,7 +461,9 @@ static inline TCGMemOp mo_b_d32(int b, TCGMemOp ot)
 
 static void gen_op_mov_reg_v(TCGMemOp ot, int reg, TCGv t0)
 {
-    int ot_size;
+    int ot_size __attribute__((unused));
+    qsim_set_inst_type(QSIM_INST_NULL);
+
     switch(ot) {
     case MO_8:
         ot_size = 1;
@@ -498,6 +500,7 @@ static inline void gen_op_mov_v_reg(TCGMemOp ot, TCGv t0, int reg)
 {
     int ot_size;
 
+    qsim_set_inst_type(QSIM_INST_NULL);
     if (ot == MO_8 && byte_reg_is_xH(reg)) {
         tcg_gen_shri_tl(t0, cpu_regs[reg - 4], 8);
         tcg_gen_ext8u_tl(t0, t0);
@@ -541,6 +544,7 @@ static inline void gen_op_add_reg_T0(TCGMemOp size, int reg)
     QSIM_REG_READ(reg, (2<<size));
     tcg_gen_add_tl(cpu_tmp0, cpu_regs[reg], cpu_T0);
     gen_op_mov_reg_v(size, reg, cpu_tmp0);
+    qsim_set_inst_type(QSIM_INST_INTBASIC);
 }
 
 static inline void gen_op_ld_v(DisasContext *s, int idx, TCGv t0, TCGv a0)
@@ -2409,12 +2413,14 @@ static void gen_cmovcc1(CPUX86State *env, DisasContext *s, TCGMemOp ot, int b,
 
 static inline void gen_op_movl_T0_seg(int seg_reg)
 {
+    qsim_set_inst_type(QSIM_INST_NULL);
     tcg_gen_ld32u_tl(cpu_T0, cpu_env,
                      offsetof(CPUX86State,segs[seg_reg].selector));
 }
 
 static inline void gen_op_movl_seg_T0_vm(int seg_reg)
 {
+    qsim_set_inst_type(QSIM_INST_NULL);
     tcg_gen_ext16u_tl(cpu_T0, cpu_T0);
     tcg_gen_st32_tl(cpu_T0, cpu_env,
                     offsetof(CPUX86State,segs[seg_reg].selector));
@@ -2425,6 +2431,7 @@ static inline void gen_op_movl_seg_T0_vm(int seg_reg)
    call this function with seg_reg == R_CS */
 static void gen_movl_seg_T0(DisasContext *s, int seg_reg)
 {
+    qsim_set_inst_type(QSIM_INST_NULL);
     if (s->pe && !s->vm86) {
         tcg_gen_trunc_tl_i32(cpu_tmp2_i32, cpu_T0);
         gen_helper_load_seg(cpu_env, tcg_const_i32(seg_reg), cpu_tmp2_i32);
@@ -2467,6 +2474,7 @@ gen_svm_check_intercept(DisasContext *s, target_ulong pc_start, uint64_t type)
 
 static inline void gen_stack_update(DisasContext *s, int addend)
 {
+    qsim_set_inst_type(QSIM_INST_STACK);
     gen_op_add_reg_im(mo_stacksize(s), R_ESP, addend);
 }
 
@@ -2523,7 +2531,6 @@ static void gen_pusha(DisasContext *s)
     TCGMemOp d_ot = s->dflag;
     int size = 1 << d_ot;
     int i;
-    qsim_set_inst_type(QSIM_INST_STACK);
 
     for (i = 0; i < 8; i++) {
         tcg_gen_addi_tl(cpu_A0, cpu_regs[R_ESP], (i - 8) * size);
@@ -2532,6 +2539,7 @@ static void gen_pusha(DisasContext *s)
     }
 
     gen_stack_update(s, -8 * size);
+    qsim_set_inst_type(QSIM_INST_STACK);
 }
 
 static void gen_popa(DisasContext *s)
@@ -2540,7 +2548,6 @@ static void gen_popa(DisasContext *s)
     TCGMemOp d_ot = s->dflag;
     int size = 1 << d_ot;
     int i;
-    qsim_set_inst_type(QSIM_INST_STACK);
 
     for (i = 0; i < 8; i++) {
         /* ESP is not reloaded */
@@ -2554,6 +2561,7 @@ static void gen_popa(DisasContext *s)
     }
 
     gen_stack_update(s, 8 * size);
+    qsim_set_inst_type(QSIM_INST_STACK);
 }
 
 static void gen_enter(DisasContext *s, int esp_addend, int level)
@@ -2562,7 +2570,6 @@ static void gen_enter(DisasContext *s, int esp_addend, int level)
     TCGMemOp a_ot = CODE64(s) ? MO_64 : s->ss32 ? MO_32 : MO_16;
     int size = 1 << d_ot;
 
-    qsim_set_inst_type(QSIM_INST_STACK);
     /* Push BP; compute FrameTemp into T1.  */
     tcg_gen_subi_tl(cpu_T1, cpu_regs[R_ESP], size);
     gen_lea_v_seg(s, a_ot, cpu_T1, R_SS, -1);
@@ -2595,6 +2602,7 @@ static void gen_enter(DisasContext *s, int esp_addend, int level)
     /* Compute the final value of ESP.  */
     tcg_gen_subi_tl(cpu_T1, cpu_T1, esp_addend + size * level);
     gen_op_mov_reg_v(a_ot, R_ESP, cpu_T1);
+    qsim_set_inst_type(QSIM_INST_STACK);
 }
 
 static void gen_leave(DisasContext *s)
@@ -2617,6 +2625,7 @@ static void gen_exception(DisasContext *s, int trapno, target_ulong cur_eip)
     gen_jmp_im(cur_eip);
     gen_helper_raise_exception(cpu_env, tcg_const_i32(trapno));
     s->is_jmp = DISAS_TB_JUMP;
+    qsim_set_inst_type(QSIM_INST_TRAP);
 }
 
 /* Generate #UD for the current instruction.  The assumption here is that
@@ -2650,7 +2659,6 @@ static void gen_unknown_opcode(CPUX86State *env, DisasContext *s)
 static void gen_interrupt(DisasContext *s, int intno,
                           target_ulong cur_eip, target_ulong next_eip)
 {
-    qsim_set_inst_type(QSIM_INST_TRAP);
     QSIM_REG_READ(QSIM_FLAG_ALL, 0);
 
     gen_update_cc_op(s);
@@ -2658,6 +2666,7 @@ static void gen_interrupt(DisasContext *s, int intno,
     gen_helper_raise_interrupt(cpu_env, tcg_const_i32(intno),
                                tcg_const_i32(next_eip - cur_eip));
     s->is_jmp = DISAS_TB_JUMP;
+    qsim_set_inst_type(QSIM_INST_TRAP);
 }
 
 static void gen_debug(DisasContext *s, target_ulong cur_eip)
@@ -2750,12 +2759,13 @@ static void gen_jmp_tb(DisasContext *s, target_ulong eip, int tb_num)
         gen_jmp_im(eip);
         gen_eob(s);
     }
+    qsim_set_inst_type(QSIM_INST_BR);
 }
 
 static void gen_jmp(DisasContext *s, target_ulong eip)
 {
-    qsim_set_inst_type(QSIM_INST_BR);
     gen_jmp_tb(s, eip, 0);
+    qsim_set_inst_type(QSIM_INST_BR);
 }
 
 static inline void gen_ldq_env_A0(DisasContext *s, int offset)
@@ -4595,6 +4605,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
     target_ulong next_eip, tval;
     int rex_w, rex_r;
 
+    qsim_set_inst_type(QSIM_INST_INTBASIC);
     if (qsim_trans_cb) qsim_trans_cb(qsim_id);
     else qsim_memop_flag = 1;
 
@@ -4772,6 +4783,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
     case 0x30 ... 0x35:
     case 0x38 ... 0x3d:
         {
+            qsim_set_inst_type(QSIM_INST_INTBASIC);
             int op, f, val;
             op = (b >> 3) & 7;
             f = (b >> 1) & 3;
@@ -4879,6 +4891,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
         break;
     case 0xf6: /* GRP3 */
     case 0xf7:
+        qsim_set_inst_type(QSIM_INST_INTBASIC);
         ot = mo_b_d(b, dflag);
 
         modrm = cpu_ldub_code(env, s->pc++);
@@ -4906,7 +4919,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             gen_op_testl_T0_T1_cc();
             set_cc_op(s, CC_OP_LOGICB + ot);
             QSIM_REG_WRITE(QSIM_FLAG_ALL, 0);
-            qsim_set_inst_type(QSIM_INST_INTBASIC);
             break;
         case 2: /* not */
             if (s->prefix & PREFIX_LOCK) {
@@ -4924,7 +4936,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                     gen_op_mov_reg_v(ot, rm, cpu_T0);
                 }
             }
-            qsim_set_inst_type(QSIM_INST_INTBASIC);
             break;
         case 3: /* neg */
             if (s->prefix & PREFIX_LOCK) {
@@ -4965,7 +4976,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             }
             gen_op_update_neg_cc();
             set_cc_op(s, CC_OP_SUBB + ot);
-            qsim_set_inst_type(QSIM_INST_INTBASIC);
             break;
         case 4: /* mul */
             qsim_set_inst_type(QSIM_INST_INTMUL);
@@ -5113,6 +5123,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             }
             break;
         case 7: /* idiv */
+            qsim_set_inst_type(QSIM_INST_INTDIV);
             switch(ot) {
             case MO_8:
                 QSIM_REG_READ(QSIM_RAX, 1);
@@ -5212,6 +5223,7 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
             qsim_set_inst_type(QSIM_INST_CALL);
             break;
         case 3: /* lcall Ev */
+            qsim_set_inst_type(QSIM_INST_CALL);
             gen_op_ld_v(s, ot, cpu_T1, cpu_A0);
             gen_add_A0_im(s, 1 << ot);
             gen_op_ld_v(s, MO_16, cpu_T0, cpu_A0);
@@ -8596,7 +8608,7 @@ void gen_intermediate_code(CPUX86State *env, TranslationBlock *tb)
     DisasContext dc1, *dc = &dc1;
     target_ulong pc_ptr;
     uint32_t flags;
-    target_ulong pc_start;
+    target_ulong pc_start, qsim_pc_start;
     target_ulong cs_base;
     int num_insns;
     int max_insns;
@@ -8682,6 +8694,7 @@ void gen_intermediate_code(CPUX86State *env, TranslationBlock *tb)
 
     gen_tb_start(tb);
     for(;;) {
+        qsim_pc_start = pc_ptr;
         tcg_gen_insn_start(pc_ptr, dc->cc_op);
         num_insns++;
 
@@ -8701,29 +8714,29 @@ void gen_intermediate_code(CPUX86State *env, TranslationBlock *tb)
             gen_io_start();
         }
 
-		// hack to encode the instruction type and arg length
-		// ilen_arg  = tcg_ctx.gen_opparam_ptr + 3;
-		if (qsim_gen_callbacks) {
-			TCGv_i32 tmp_size, tmp_type;
-			TCGv_i64 tmp_insn;
-			int itype_arg_idx = tcg_ctx.gen_next_parm_idx + 3;
-			ilen_arg  = &tcg_ctx.gen_opparam_buf[itype_arg_idx];
-			itype_arg_idx = tcg_ctx.gen_next_parm_idx + 5;
-			itype_arg = &tcg_ctx.gen_opparam_buf[itype_arg_idx];
-			tmp_insn = tcg_const_i64(pc_ptr);
-			tmp_size = tcg_const_i32(0xdeadbee5);
-			tmp_type = tcg_const_i32(0xdeadbeef);
-			gen_helper_inst_callback(cpu_env, tmp_insn, tmp_size, tmp_type);
-			tcg_temp_free_i64(tmp_insn);
-			tcg_temp_free_i32(tmp_size);
-			tcg_temp_free_i32(tmp_type);
-		} else {
-			gen_helper_qsim_callback();
-		}
+        // hack to encode the instruction type and arg length
+        // ilen_arg  = tcg_ctx.gen_opparam_ptr + 3;
+        if (qsim_gen_callbacks) {
+            TCGv_i32 tmp_size, tmp_type;
+            TCGv_i64 tmp_insn;
+            int itype_arg_idx = tcg_ctx.gen_next_parm_idx + 3;
+            ilen_arg  = &tcg_ctx.gen_opparam_buf[itype_arg_idx];
+            itype_arg_idx = tcg_ctx.gen_next_parm_idx + 5;
+            itype_arg = &tcg_ctx.gen_opparam_buf[itype_arg_idx];
+            tmp_insn = tcg_const_i64(pc_ptr);
+            tmp_size = tcg_const_i32(0xdeadbee5);
+            tmp_type = tcg_const_i32(0xdeadbeef);
+            gen_helper_inst_callback(cpu_env, tmp_insn, tmp_size, tmp_type);
+            tcg_temp_free_i64(tmp_insn);
+            tcg_temp_free_i32(tmp_size);
+            tcg_temp_free_i32(tmp_type);
+        } else {
+            gen_helper_qsim_callback();
+        }
 
         pc_ptr = disas_insn(env, dc, pc_ptr);
-	if (qsim_gen_callbacks)
-		*ilen_arg = pc_ptr - pc_start;
+        if (qsim_gen_callbacks)
+            *ilen_arg = pc_ptr - qsim_pc_start;
         num_insns++;
         /* stop translation if indicated */
         if (dc->is_jmp)
