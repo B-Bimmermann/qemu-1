@@ -446,7 +446,7 @@ void helper_inst_callback(CPUX86State *env, target_ulong vaddr,
         return;
 
     // for now, only enable userspace instruction callbacks
-    if (vaddr & 0xffffffff00000000)
+    if (!qsim_sys_callbacks && (vaddr & 0xffffffff00000000))
         return;
 
     qsim_eip = vaddr;
