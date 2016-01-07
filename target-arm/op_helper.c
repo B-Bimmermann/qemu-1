@@ -34,8 +34,6 @@
 extern qsim_ucontext_t qemu_context;
 extern qsim_ucontext_t main_context;
 
-extern int qsim_memop_flag;
-
 extern int qsim_id;
 
 extern uint64_t qsim_icount;
@@ -1074,26 +1072,26 @@ void HELPER(inst_callback)(CPUARMState *env, uint64_t vaddr, uint32_t length, ui
 
 static inline void memop_callback(CPUARMState *env, uint64_t addr, uint32_t size, int type)
 {
-  if (!qsim_sys_callbacks && extract64(env->cp15.contextidr_el[1], 0, 32) != qsim_tpid)
-    return;
+    if (!qsim_sys_callbacks && extract64(env->cp15.contextidr_el[1], 0, 32) != qsim_tpid)
+        return;
 
-	if (qsim_mem_cb == NULL)
-		return;
-  else {
-    uint8_t *buf = NULL;
-    ARMCPU* cpu = arm_env_get_cpu(env);
-    CPUState* cs = CPU(cpu);
-    qsim_id = cs->cpu_index;
-    buf = get_host_vaddr(env, addr, size);
-    if (buf)
-      qsim_mem_cb(qsim_id, addr, (uint64_t)buf, size, type);
-  }
+    if (qsim_mem_cb == NULL)
+        return;
+    else {
+        uint8_t *buf = NULL;
+        ARMCPU* cpu = arm_env_get_cpu(env);
+        CPUState* cs = CPU(cpu);
+        qsim_id = cs->cpu_index;
+        buf = get_host_vaddr(env, addr, size);
+        if (buf)
+            qsim_mem_cb(qsim_id, addr, (uint64_t)buf, size, type);
+    }
 }
 
 void HELPER(store_callback_pre)(CPUARMState *env, uint64_t vaddr, uint32_t length, uint32_t type)
 {
-	memop_callback(env, vaddr, length, type);
-	return;
+    memop_callback(env, vaddr, length, type);
+    return;
 }
 
 void HELPER(store_callback_post)(CPUARMState *env, uint64_t vaddr, uint32_t length, uint32_t type)
@@ -1160,87 +1158,138 @@ void HELPER(atomic_callback)(void)
     return;
 }
 
+CPUARMState* get_env(int cpu_idx);
 uint8_t mem_rd(uint64_t paddr);
 void mem_wr(uint64_t paddr, uint8_t val);
-uint8_t mem_rd_virt(uint64_t vaddr);
-void mem_wr_virt(uint64_t vaddr, uint8_t val);
+uint8_t mem_rd_virt(int cpu_idx, uint64_t vaddr);
+void mem_wr_virt(int cpu_idx, uint64_t vaddr, uint8_t val);
+
+CPUARMState* get_env(int cpu_idx)
+{
+    CPUARMState *cpu = (CPUARMState *)first_cpu;
+    CPUState *cs = CPU(cpu);
+
+    for (; cs && cs->cpu_index != cpu_idx; cs = CPU_NEXT(cs));
+
+    if (cs)
+      cpu = &ARM_CPU(cs)->env;
+
+    return cpu;
+}
 
 uint64_t get_reg(int c, int r)
 {
-    if (r != QSIM_CPSR) {
-        helper_get_user_reg(qsim_cpu, r);
-    } else {
-        switch (r) {
-        case QSIM_CPSR:
-            return cpsr_read(qsim_cpu);
+    CPUARMState *cpu = get_env(c);
+    switch (r) {
+        case ARM64_REG_X0 : return cpu->xregs[0] ; break;
+        case ARM64_REG_X1 : return cpu->xregs[1] ; break;
+        case ARM64_REG_X2 : return cpu->xregs[2] ; break;
+        case ARM64_REG_X3 : return cpu->xregs[3] ; break;
+        case ARM64_REG_X4 : return cpu->xregs[4] ; break;
+        case ARM64_REG_X5 : return cpu->xregs[5] ; break;
+        case ARM64_REG_X6 : return cpu->xregs[6] ; break;
+        case ARM64_REG_X7 : return cpu->xregs[7] ; break;
+        case ARM64_REG_X8 : return cpu->xregs[8] ; break;
+        case ARM64_REG_X9 : return cpu->xregs[9] ; break;
+        case ARM64_REG_X10: return cpu->xregs[10]; break;
+        case ARM64_REG_X11: return cpu->xregs[11]; break;
+        case ARM64_REG_X12: return cpu->xregs[12]; break;
+        case ARM64_REG_X13: return cpu->xregs[13]; break;
+        case ARM64_REG_X14: return cpu->xregs[14]; break;
+        case ARM64_REG_X15: return cpu->xregs[15]; break;
+        case ARM64_REG_X16: return cpu->xregs[16]; break;
+        case ARM64_REG_X17: return cpu->xregs[17]; break;
+        case ARM64_REG_X18: return cpu->xregs[18]; break;
+        case ARM64_REG_X19: return cpu->xregs[19]; break;
+        case ARM64_REG_X20: return cpu->xregs[20]; break;
+        case ARM64_REG_X21: return cpu->xregs[21]; break;
+        case ARM64_REG_X22: return cpu->xregs[22]; break;
+        case ARM64_REG_X23: return cpu->xregs[23]; break;
+        case ARM64_REG_X24: return cpu->xregs[24]; break;
+        case ARM64_REG_X25: return cpu->xregs[25]; break;
+        case ARM64_REG_X26: return cpu->xregs[26]; break;
+        case ARM64_REG_X27: return cpu->xregs[27]; break;
+        case ARM64_REG_X28: return cpu->xregs[28]; break;
+        case ARM64_REG_X29: return cpu->xregs[29]; break;
+        case ARM64_REG_X30: return cpu->xregs[30]; break;
+        // get other registers
         default: break;
-        }
-    }
+    };
 
-	return 0;
+    return 0;
 }
 
 void set_reg(int c, int r, uint64_t val)
 {
-    if (r != QSIM_CPSR) {
-        helper_set_user_reg(qsim_cpu, r, val);
-    } else {
-        switch (r) {
-        case QSIM_CPSR:
-            cpsr_write(qsim_cpu, val, ~0);
+    CPUARMState *cpu = get_env(c);
+    switch (r) {
+        case ARM64_REG_X0 : cpu->xregs[0]  = val; break;
+        case ARM64_REG_X1 : cpu->xregs[1]  = val; break;
+        case ARM64_REG_X2 : cpu->xregs[2]  = val; break;
+        case ARM64_REG_X3 : cpu->xregs[3]  = val; break;
+        case ARM64_REG_X4 : cpu->xregs[4]  = val; break;
+        case ARM64_REG_X5 : cpu->xregs[5]  = val; break;
+        case ARM64_REG_X6 : cpu->xregs[6]  = val; break;
+        case ARM64_REG_X7 : cpu->xregs[7]  = val; break;
+        case ARM64_REG_X8 : cpu->xregs[8]  = val; break;
+        case ARM64_REG_X9 : cpu->xregs[9]  = val; break;
+        case ARM64_REG_X10: cpu->xregs[10] = val; break;
+        case ARM64_REG_X11: cpu->xregs[11] = val; break;
+        case ARM64_REG_X12: cpu->xregs[12] = val; break;
+        case ARM64_REG_X13: cpu->xregs[13] = val; break;
+        case ARM64_REG_X14: cpu->xregs[14] = val; break;
+        case ARM64_REG_X15: cpu->xregs[15] = val; break;
+        case ARM64_REG_X16: cpu->xregs[16] = val; break;
+        case ARM64_REG_X17: cpu->xregs[17] = val; break;
+        case ARM64_REG_X18: cpu->xregs[18] = val; break;
+        case ARM64_REG_X19: cpu->xregs[19] = val; break;
+        case ARM64_REG_X20: cpu->xregs[20] = val; break;
+        case ARM64_REG_X21: cpu->xregs[21] = val; break;
+        case ARM64_REG_X22: cpu->xregs[22] = val; break;
+        case ARM64_REG_X23: cpu->xregs[23] = val; break;
+        case ARM64_REG_X24: cpu->xregs[24] = val; break;
+        case ARM64_REG_X25: cpu->xregs[25] = val; break;
+        case ARM64_REG_X26: cpu->xregs[26] = val; break;
+        case ARM64_REG_X27: cpu->xregs[27] = val; break;
+        case ARM64_REG_X28: cpu->xregs[28] = val; break;
+        case ARM64_REG_X29: cpu->xregs[29] = val; break;
+        case ARM64_REG_X30: cpu->xregs[30] = val; break;
+        // TODO: set other registers
         default: break;
-        }
-    }
+    };
 
-	return;
-}
-
-uint64_t get_reg64(int c, int r)
-{
-    if (r != QSIM_CPSR64) {
-        helper_get_user_reg(qsim_cpu, r);
-    } else {
-        switch (r) {
-        case QSIM_CPSR:
-            return cpsr_read(qsim_cpu);
-        default: break;
-        }
-    }
-
-	return 0;
-}
-
-void set_reg64(int c, int r, uint64_t val)
-{
-    if (r != QSIM_CPSR64) {
-        helper_set_user_reg(qsim_cpu, r, val);
-    } else {
-        switch (r) {
-        case QSIM_CPSR64:
-            cpsr_write(qsim_cpu, val, ~0);
-        default: break;
-        }
-    }
-
-	return;
+    return;
 }
 
 uint8_t mem_rd(uint64_t paddr)
 {
-	return 0;
+    CPUARMState *env = get_env(0);
+    CPUState *cs = CPU(arm_env_get_cpu(env));
+    uint8_t b = ldub_phys(cs->as, paddr); // ldub_kernel(vaddr)*/0;
+    return b;
 }
 
-void mem_wr(uint64_t paddr, uint8_t val)
+void mem_wr(uint64_t paddr, uint8_t value)
 {
-	return;
+    CPUARMState *env = get_env(0);
+    CPUState *cs = CPU(arm_env_get_cpu(env));
+    stb_phys(cs->as, paddr, value);
+    return;
 }
 
-uint8_t mem_rd_virt(uint64_t vaddr)
+uint8_t mem_rd_virt(int cpu_idx, uint64_t vaddr)
 {
-	return 0;
+    CPUARMState *env = get_env(cpu_idx);
+    uint8_t *buf;
+    buf = get_host_vaddr(env, vaddr, 1);
+    return *buf;
 }
 
-void mem_wr_virt(uint64_t vaddr, uint8_t val)
+void mem_wr_virt(int cpu_idx, uint64_t vaddr, uint8_t value)
 {
-	return;
+    uint8_t *buf;
+    CPUARMState *env = get_env(cpu_idx);
+    buf = get_host_vaddr(env, vaddr, 1);
+    *buf = value;
+    return;
 }
