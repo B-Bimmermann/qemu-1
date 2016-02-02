@@ -2,7 +2,7 @@
 # QA groups control file
 # Defines test groups
 # - do not start group names with a digit
-#
+# 
 
 #
 # test-group association ... one line per test
