@@ -1565,6 +1565,7 @@ int vm_stop_force_state(RunState state)
 }
 
 extern int qsim_id;
+extern bool qsim_gen_callbacks;
 
 static void tcg_exec_one(void)
 {
@@ -1594,6 +1595,8 @@ static void tcg_exec_one(void)
     }
 
     exit_request = 0;
+    if (!qsim_gen_callbacks)
+        qsim_id = (qsim_id+1) % smp_cpus;
 }
 void list_cpus(FILE *f, fprintf_function cpu_fprintf, const char *optarg)
 {
