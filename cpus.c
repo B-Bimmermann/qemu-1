@@ -1086,6 +1086,8 @@ static void tcg_exec_all(void);
 static void tcg_exec_one(void);
 
 extern int run_mode;
+extern int64_t qsim_icount;
+extern void qsim_swap_ctx(void);
 
 static int64_t tcg_get_icount_limit(void)
 {
@@ -1216,8 +1218,14 @@ static void *qemu_tcg_cpu_thread_fn(void *arg)
         qemu_account_warp_timer();
         if (!run_mode)
             tcg_exec_all();
-        else
+        else {
+            int64_t icount = qsim_icount;
             tcg_exec_one();
+            // swap ctx if we cannot execute any instructions
+            if (icount == qsim_icount) {
+                qsim_swap_ctx();
+            }
+        }
 
         if (!cpu) {
             cpu = first_cpu;
