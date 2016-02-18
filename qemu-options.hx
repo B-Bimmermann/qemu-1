@@ -5,7 +5,7 @@ HXCOMM DEF(option, HAS_ARG/0, opt_enum, opt_help, arch_mask) is used to
 HXCOMM construct option structures, enums and help message for specified
 HXCOMM architectures.
 HXCOMM HXCOMM can be used for comments, discarded from both texi and C
-
+ 
 DEFHEADING(Standard options:)
 STEXI
 @table @option
