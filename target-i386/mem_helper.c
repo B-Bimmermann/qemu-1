@@ -27,7 +27,6 @@
 
 #include "qsim-vm.h"
 #include "qsim-context.h"
-/* broken thread support */
 
 extern bool atomic_flag;
 static int atomic_locked;
@@ -52,7 +51,8 @@ extern qsim_ucontext_t main_context, qemu_context;
 
 extern int get_cpuid(CPUX86State *env);
 
-CPUState *qsim_cpu;
+extern CPUX86State* get_env(int cpu_idx);
+
 void helper_cmpxchg8b_unlocked(CPUX86State *env, target_ulong a0)
 {
     uintptr_t ra = GETPC();
