@@ -264,32 +264,34 @@ void helper_atomic_callback(void)
     return;
 }
 
-uint8_t mem_rd(CPUX86State *env, uint64_t paddr);
-void mem_wr(CPUX86State *env, uint64_t paddr, uint8_t value);
-uint8_t mem_rd_virt(CPUX86State *env, uint64_t vaddr);
-void mem_wr_virt(CPUX86State *env, uint64_t vaddr, uint8_t val);
-uint64_t get_reg(CPUX86State *env, int r);
-void set_reg(int r, uint64_t val);
+uint8_t mem_rd(uint64_t paddr);
+void mem_wr(uint64_t paddr, uint8_t value);
+uint8_t mem_rd_virt(int cpu_idx, uint64_t vaddr);
+void mem_wr_virt(int cpu_idx, uint64_t vaddr, uint8_t val);
+uint64_t get_reg(int cpu_idx, int r);
+void set_reg(int cpu_idx, int r, uint64_t val);
 
 void helper_reg_read_callback(CPUX86State *env, uint32_t reg, uint32_t size)
 {
     // pid based callbacks
-    if (!qsim_sys_callbacks && curr_tpid[get_cpuid(env)] != qsim_tpid)
+    if (!qsim_sys_callbacks && curr_tpid[get_cpuidx(env)] != qsim_tpid)
         return;
 
-	if (qsim_gen_callbacks && qsim_reg_cb)
-		qsim_reg_cb(get_cpuid(env), reg, size, 0);
-	return;
+    if (qsim_gen_callbacks && qsim_reg_cb)
+      qsim_reg_cb(get_cpuidx(env), reg, size, 0);
+
+    return;
 }
 
 void helper_reg_write_callback(CPUX86State *env, uint32_t reg, uint32_t size)
 {
     // pid based callbacks
-    if (!qsim_sys_callbacks && curr_tpid[get_cpuid(env)] != qsim_tpid)
+    if (!qsim_sys_callbacks && curr_tpid[get_cpuidx(env)] != qsim_tpid)
         return;
 
     if (qsim_gen_callbacks && qsim_reg_cb)
-        qsim_reg_cb(get_cpuid(env), reg, size, 1);
+        qsim_reg_cb(get_cpuidx(env), reg, size, 1);
+
     return;
 }
 
@@ -547,21 +549,21 @@ static void memop_callback(CPUX86State *env, target_ulong vaddr,
     if (!qsim_sys_callbacks && curr_tpid[get_cpuidx(env)] != qsim_tpid)
         return;
 
-	if (!qsim_mem_cb)
-		return;
+    if (!qsim_mem_cb)
+      return;
 
-	// Handle unaligned page-crossing accessess as a series of aligned accesses.
-	if ((size-1)&vaddr && (vaddr&0xfff)+size >= 0x1000) {
-		memop_callback(env, vaddr,          size/2, type);
-		memop_callback(env, vaddr + size/2, size/2, type);
-	} else {
-		CPUState *cs = CPU(x86_env_get_cpu(env));
-		uint8_t *buf;
+    // Handle unaligned page-crossing accessess as a series of aligned accesses.
+    if ((size-1)&vaddr && (vaddr&0xfff)+size >= 0x1000) {
+      memop_callback(env, vaddr,          size/2, type);
+      memop_callback(env, vaddr + size/2, size/2, type);
+    } else {
+      CPUState *cs = CPU(x86_env_get_cpu(env));
+      uint8_t *buf;
 
-		qsim_id = cs->cpu_index;
-		buf = get_host_vaddr(env, vaddr, size);
-		qsim_mem_cb(qsim_id, vaddr, (uint64_t)buf, size, type);
-	}
+      qsim_id = cs->cpu_index;
+      buf = get_host_vaddr(env, vaddr, size);
+      qsim_mem_cb(qsim_id, vaddr, (uint64_t)buf, size, type);
+    }
 }
 
 void helper_store_callback_pre(CPUX86State *env, uint64_t vaddr,
