@@ -24,7 +24,6 @@
 #include "exec/memory-internal.h"
 
 bool exit_request;
-CPUState *tcg_current_cpu;
 int tcg_pending_threads;
 
 /* exit the current TB, but without causing any exception to be raised */
@@ -121,6 +120,7 @@ void run_on_cpu(CPUState *cpu, run_on_cpu_func func, void *data)
 {
     struct qemu_work_item wi;
 
+    /* Always true when using tcg RR scheduling from a vCPU context */
     if (qemu_cpu_is_self(cpu)) {
         func(cpu, data);
         return;
@@ -144,6 +144,7 @@ void async_run_on_cpu(CPUState *cpu, run_on_cpu_func func, void *data)
 {
     struct qemu_work_item *wi;
 
+    /* Always true when using tcg RR scheduling from a vCPU context */
     if (qemu_cpu_is_self(cpu)) {
         func(cpu, data);
         return;
