@@ -136,6 +136,18 @@ void fork_end(int child)
     }
 }
 
+static void step_atomic(CPUState *cpu)
+{
+    start_exclusive();
+
+    /* Since we got here, we know that parallel_cpus must be true.  */
+    parallel_cpus = false;
+    cpu_exec_step(cpu);
+    parallel_cpus = true;
+
+    end_exclusive();
+}
+
 #ifdef TARGET_I386
 /***********************************************************/
 /* CPUX86 core interface */
@@ -353,6 +365,9 @@ void cpu_loop(CPUX86State *env)
                     queue_signal(env, info.si_signo, &info);
                   }
             }
+            break;
+        case EXCP_ATOMIC:
+            step_atomic(cs);
             break;
         default:
             pc = env->segs[R_CS].base + env->eip;
@@ -848,6 +863,9 @@ void cpu_loop(CPUARMState *env)
         case EXCP_YIELD:
             /* nothing to do here for user-mode, just resume guest code */
             break;
+        case EXCP_ATOMIC:
+            step_atomic(cs);
+            break;
         default:
         error:
             EXCP_DUMP(env, "qemu: unhandled CPU exception 0x%x - aborting\n", trapnr);
@@ -1048,6 +1066,9 @@ void cpu_loop(CPUARMState *env)
         case EXCP_YIELD:
             /* nothing to do here for user-mode, just resume guest code */
             break;
+        case EXCP_ATOMIC:
+            step_atomic(cs);
+            break;
         default:
             EXCP_DUMP(env, "qemu: unhandled CPU exception 0x%x - aborting\n", trapnr);
             abort();
@@ -1138,6 +1159,9 @@ void cpu_loop(CPUUniCore32State *env)
                     queue_signal(env, info.si_signo, &info);
                 }
             }
+            break;
+        case EXCP_ATOMIC:
+            step_atomic(cs);
             break;
         default:
             goto error;
@@ -1411,6 +1435,9 @@ void cpu_loop (CPUSPARCState *env)
                     queue_signal(env, info.si_signo, &info);
                   }
             }
+            break;
+        case EXCP_ATOMIC:
+            step_atomic(cs);
             break;
         default:
             printf ("Unhandled trap: 0x%x\n", trapnr);
@@ -1961,6 +1988,9 @@ void cpu_loop(CPUPPCState *env)
             break;
         case EXCP_INTERRUPT:
             /* just indicate that signals should be handled asap */
+            break;
+        case EXCP_ATOMIC:
+            step_atomic(cs);
             break;
         default:
             cpu_abort(cs, "Unknown exception 0x%d. Aborting\n", trapnr);
@@ -2637,6 +2667,9 @@ done_syscall:
                 }
             }
             break;
+        case EXCP_ATOMIC:
+            step_atomic(cs);
+            break;
         default:
 error:
             EXCP_DUMP(env, "qemu: unhandled CPU exception 0x%x - aborting\n", trapnr);
@@ -2724,6 +2757,9 @@ void cpu_loop(CPUOpenRISCState *env)
         case EXCP_NR:
             qemu_log_mask(CPU_LOG_INT, "\nNR\n");
             break;
+        case EXCP_ATOMIC:
+            step_atomic(cs);
+            break;
         default:
             EXCP_DUMP(env, "\nqemu: unhandled CPU exception %#x - aborting\n",
                      trapnr);
@@ -2800,6 +2836,9 @@ void cpu_loop(CPUSH4State *env)
             queue_signal(env, info.si_signo, &info);
 	    break;
 
+        case EXCP_ATOMIC:
+            step_atomic(cs);
+            break;
         default:
             printf ("Unhandled trap: 0x%x\n", trapnr);
             cpu_dump_state(cs, stderr, fprintf, 0);
@@ -2866,6 +2905,9 @@ void cpu_loop(CPUCRISState *env)
                     queue_signal(env, info.si_signo, &info);
                   }
             }
+            break;
+        case EXCP_ATOMIC:
+            step_atomic(cs);
             break;
         default:
             printf ("Unhandled trap: 0x%x\n", trapnr);
@@ -2983,6 +3025,9 @@ void cpu_loop(CPUMBState *env)
                   }
             }
             break;
+        case EXCP_ATOMIC:
+            step_atomic(cs);
+            break;
         default:
             printf ("Unhandled trap: 0x%x\n", trapnr);
             cpu_dump_state(cs, stderr, fprintf, 0);
@@ -3085,6 +3130,9 @@ void cpu_loop(CPUM68KState *env)
                     queue_signal(env, info.si_signo, &info);
                   }
             }
+            break;
+        case EXCP_ATOMIC:
+            step_atomic(cs);
             break;
         default:
             EXCP_DUMP(env, "qemu: unhandled CPU exception 0x%x - aborting\n", trapnr);
@@ -3322,6 +3370,9 @@ void cpu_loop(CPUAlphaState *env)
         case EXCP_INTERRUPT:
             /* Just indicate that signals should be handled asap.  */
             break;
+        case EXCP_ATOMIC:
+            step_atomic(cs);
+            break;
         default:
             printf ("Unhandled trap: 0x%x\n", trapnr);
             cpu_dump_state(cs, stderr, fprintf, 0);
@@ -3451,6 +3502,9 @@ void cpu_loop(CPUS390XState *env)
             queue_signal(env, info.si_signo, &info);
             break;
 
+        case EXCP_ATOMIC:
+            step_atomic(cs);
+            break;
         default:
             fprintf(stderr, "Unhandled trap: 0x%x\n", trapnr);
             cpu_dump_state(cs, stderr, fprintf, 0);
@@ -3704,6 +3758,9 @@ void cpu_loop(CPUTLGState *env)
         case TILEGX_EXCP_REG_IDN_ACCESS:
         case TILEGX_EXCP_REG_UDN_ACCESS:
             gen_sigill_reg(env);
+            break;
+        case EXCP_ATOMIC:
+            step_atomic(cs);
             break;
         default:
             fprintf(stderr, "trapnr is %d[0x%x].\n", trapnr, trapnr);
