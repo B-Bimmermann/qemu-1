@@ -4,17 +4,12 @@
 #
 FAKEROOT=`which fakeroot 2> /dev/null`
 
-exit_and_skip()
-{
-    exit 3
-}
-
 #
 # fakeroot is needed to run the bootstrap stage
 #
 if [ -z $FAKEROOT ]; then
     echo "Please install fakeroot to enable bootstraping"
-    exit_and_skip
+    exit 1
 fi
 
 # We check in order for
@@ -39,7 +34,7 @@ else
     DEBOOTSTRAP=${DEBOOTSTRAP_DIR}/debootstrap
     if [ ! -f $DEBOOTSTRAP ]; then
         echo "Couldn't find script at ${DEBOOTSTRAP}"
-        exit_and_skip
+        exit 2
     fi
 fi
 
@@ -49,7 +44,7 @@ fi
 BINFMT_DIR=/proc/sys/fs/binfmt_misc
 if [ ! -e $BINFMT_DIR ]; then
    echo "binfmt_misc needs enabling for a QEMU bootstrap to work"
-   exit_and_skip
+   exit 3
 else
     # DEB_ARCH and QEMU arch names are not totally aligned
     case "${DEB_ARCH}" in
@@ -77,11 +72,11 @@ else
     esac
     if [ ! -e "${BINFMT_DIR}/$QEMU" ]; then
         echo "No binfmt_misc rule to run $QEMU, can't bootstrap"
-        exit_and_skip
+        exit 4
     fi
 fi
 
-echo "Building a rootfs using ${FAKEROOT} and ${DEBOOTSTRAP} ${DEB_ARCH}/${DEB_TYPE}"
+echo "Building a rootfs using ${FAKEROOT} and ${DEBOOTSTRAP}"
 
-${FAKEROOT} ${DEBOOTSTRAP} --variant=buildd --foreign --arch=$DEB_ARCH $DEB_TYPE . http://httpredir.debian.org/debian || exit 1
+${FAKEROOT} ${DEBOOTSTRAP} --variant=buildd --foreign --arch=$DEB_ARCH $DEB_TYPE . http://httpredir.debian.org/debian
 exit 0

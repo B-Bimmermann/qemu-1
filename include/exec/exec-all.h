@@ -256,6 +256,16 @@ void tb_free(TranslationBlock *tb);
 void tb_flush(CPUState *cpu);
 void tb_phys_invalidate(TranslationBlock *tb, tb_page_addr_t page_addr);
 
+static inline void tb_mark_invalid(TranslationBlock *tb)
+{
+    cpu_get_invalid_tb_cpu_state(&tb->pc, &tb->cs_base, &tb->flags);
+}
+
+static inline bool tb_is_invalid(TranslationBlock *tb)
+{
+    return cpu_tb_cpu_state_is_invalidated(tb->pc, tb->cs_base, tb->flags);
+}
+
 #if defined(USE_DIRECT_JUMP)
 
 #if defined(CONFIG_TCG_INTERPRETER)
@@ -313,6 +323,7 @@ static inline void tb_set_jmp_target(TranslationBlock *tb,
 
 #endif
 
+/* Called with tb_lock held.  */
 static inline void tb_add_jump(TranslationBlock *tb, int n,
                                TranslationBlock *tb_next)
 {
@@ -369,6 +380,7 @@ void tlb_fill(CPUState *cpu, target_ulong addr, MMUAccessType access_type,
 #if defined(CONFIG_USER_ONLY)
 void mmap_lock(void);
 void mmap_unlock(void);
+bool have_mmap_lock(void);
 
 static inline tb_page_addr_t get_page_addr_code(CPUArchState *env1, target_ulong addr)
 {
@@ -404,7 +416,36 @@ bool memory_region_is_unassigned(MemoryRegion *mr);
 extern int singlestep;
 
 /* cpu-exec.c, accessed with atomic_mb_read/atomic_mb_set */
-extern CPUState *tcg_current_cpu;
-extern bool exit_request;
+extern int tcg_pending_threads;
+
+/**
+ * qemu_work_cond - condition to wait for CPU work items completion
+ */
+extern QemuCond qemu_work_cond;
+/**
+ * qemu_safe_work_cond - condition to wait for safe CPU work items completion
+ */
+extern QemuCond qemu_safe_work_cond;
+/**
+ * qemu_exclusive_cond - condition to wait for all TCG threads to be out of
+ *                       guest code execution loop
+ */
+extern QemuCond qemu_exclusive_cond;
+
+/**
+ * qemu_get_cpu_work_mutex() - get the mutex which protects CPU work execution
+ *
+ * Return: A pointer to the mutex.
+ */
+QemuMutex *qemu_get_cpu_work_mutex(void);
+/**
+ * process_queued_cpu_work() - process all items on CPU work queue
+ * @cpu: The CPU which work queue to process.
+ */
+void process_queued_cpu_work(CPUState *cpu);
+/**
+ * wait_safe_cpu_work() - wait until all safe CPU work items has processed
+ */
+void wait_safe_cpu_work(void);
 
 #endif

@@ -394,6 +394,20 @@ static inline void cpu_get_tb_cpu_state(CPUS390XState* env, target_ulong *pc,
              ((env->psw.mask & PSW_MASK_32) ? FLAG_MASK_32 : 0);
 }
 
+static inline void cpu_get_invalid_tb_cpu_state(target_ulong *pc,
+                                                target_ulong *cs_base,
+                                                uint32_t *flags)
+{
+    *cs_base = -1;
+}
+
+static inline bool cpu_tb_cpu_state_is_invalidated(target_ulong pc,
+                                                   target_ulong cs_base,
+                                                   uint32_t flags)
+{
+    return cs_base == -1;
+}
+
 /* While the PoO talks about ILC (a number between 1-3) what is actually
    stored in LowCore is shifted left one bit (an even between 2-6).  As
    this is the actual length of the insn and therefore more useful, that
@@ -499,17 +513,14 @@ static inline hwaddr decode_basedisp_s(CPUS390XState *env, uint32_t ipb,
 #define decode_basedisp_rs decode_basedisp_s
 
 /* helper functions for run_on_cpu() */
-static inline void s390_do_cpu_reset(void *arg)
+static inline void s390_do_cpu_reset(CPUState *cs, void *arg)
 {
-    CPUState *cs = arg;
     S390CPUClass *scc = S390_CPU_GET_CLASS(cs);
 
     scc->cpu_reset(cs);
 }
-static inline void s390_do_cpu_full_reset(void *arg)
+static inline void s390_do_cpu_full_reset(CPUState *cs, void *arg)
 {
-    CPUState *cs = arg;
-
     cpu_reset(cs);
 }
 

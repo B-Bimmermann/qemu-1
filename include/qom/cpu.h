@@ -232,12 +232,15 @@ struct kvm_run;
 #define TB_JMP_CACHE_SIZE (1 << TB_JMP_CACHE_BITS)
 
 /* work queue */
+typedef void (*run_on_cpu_func)(CPUState *cpu, void *data);
+
 struct qemu_work_item {
     struct qemu_work_item *next;
-    void (*func)(void *data);
+    run_on_cpu_func func;
     void *data;
     int done;
     bool free;
+    bool safe;
 };
 
 /**
@@ -325,7 +328,10 @@ struct CPUState {
     MemoryRegion *memory;
 
     void *env_ptr; /* CPUArchState */
+
+    /* Writes protected by tb_lock, reads not thread-safe  */
     struct TranslationBlock *tb_jmp_cache[TB_JMP_CACHE_SIZE];
+
     struct GDBRegisterState *gdb_regs;
     int gdb_num_regs;
     int gdb_num_g_regs;
@@ -386,6 +392,15 @@ extern struct CPUTailQ cpus;
 #define first_cpu QTAILQ_FIRST(&cpus)
 
 extern __thread CPUState *current_cpu;
+
+/**
+ * qemu_tcg_mttcg_enabled:
+ * Check whether we are running MultiThread TCG or not.
+ *
+ * Returns: %true if we are in MTTCG mode %false otherwise.
+ */
+extern bool mttcg_enabled;
+#define qemu_tcg_mttcg_enabled() (mttcg_enabled)
 
 /**
  * cpu_paging_enabled:
@@ -623,7 +638,7 @@ bool cpu_is_stopped(CPUState *cpu);
  *
  * Schedules the function @func for execution on the vCPU @cpu.
  */
-void run_on_cpu(CPUState *cpu, void (*func)(void *data), void *data);
+void run_on_cpu(CPUState *cpu, run_on_cpu_func func, void *data);
 
 /**
  * async_run_on_cpu:
@@ -633,7 +648,20 @@ void run_on_cpu(CPUState *cpu, void (*func)(void *data), void *data);
  *
  * Schedules the function @func for execution on the vCPU @cpu asynchronously.
  */
-void async_run_on_cpu(CPUState *cpu, void (*func)(void *data), void *data);
+void async_run_on_cpu(CPUState *cpu, run_on_cpu_func func, void *data);
+
+/**
+ * async_safe_run_on_cpu:
+ * @cpu: The vCPU to run on.
+ * @func: The function to be executed.
+ * @data: Data to pass to the function.
+ *
+ * Schedules the function @func for execution on the vCPU @cpu asynchronously
+ * and in quiescent state. Quiescent state means: (1) all other vCPUs are
+ * halted and (2) #qemu_global_mutex (a.k.a. BQL) in system-mode or
+ * #exclusive_lock in user-mode emulation is held while @func is executing.
+ */
+void async_safe_run_on_cpu(CPUState *cpu, run_on_cpu_func func, void *data);
 
 /**
  * qemu_get_cpu:

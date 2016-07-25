@@ -179,9 +179,6 @@ class Docker(object):
             self._instances.remove(label)
         return ret
 
-    def command(self, cmd, argv, quiet):
-        return self._do([cmd] + argv, quiet=quiet)
-
 class SubCommand(object):
     """A SubCommand template base class"""
     name = None # Subcommand name
@@ -236,14 +233,8 @@ class BuildCommand(SubCommand):
             # Is there a .pre file to run in the build context?
             docker_pre = os.path.splitext(args.dockerfile)[0]+".pre"
             if os.path.exists(docker_pre):
-                rc = subprocess.call(os.path.realpath(docker_pre),
-                                     cwd=docker_dir)
-                if rc == 3:
-                    print "Skip"
-                    return 0
-                elif rc != 0:
-                    print "%s exited with code %d" % (docker_pre, rc)
-                    return 1
+                subprocess.check_call(os.path.realpath(docker_pre),
+                                      cwd=docker_dir)
 
             # Do we include a extra binary?
             if args.include_executable:
@@ -311,12 +302,6 @@ class CleanCommand(SubCommand):
     def run(self, args, argv):
         Docker().clean()
         return 0
-
-class ImagesCommand(SubCommand):
-    """Run "docker images" command"""
-    name = "images"
-    def run(self, args, argv):
-        return Docker().command("images", argv, args.quiet)
 
 def main():
     parser = argparse.ArgumentParser(description="A Docker helper",
