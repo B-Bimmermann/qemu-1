@@ -144,6 +144,11 @@ void async_run_on_cpu(CPUState *cpu, run_on_cpu_func func, void *data)
     queue_work_on_cpu(cpu, wi);
 }
 
+typedef struct SafeWorkItem {
+    run_on_cpu_func func;
+    void *data;
+} SafeWorkItem;
+
 /* Wait for pending exclusive operations to complete.  The exclusive lock
    must be held.  */
 static inline void exclusive_idle(void)
@@ -206,6 +211,26 @@ void cpu_exec_end(CPUState *cpu)
     }
     exclusive_idle();
     qemu_mutex_unlock(&qemu_cpu_list_mutex);
+}
+
+static void async_safe_run_on_cpu_fn(CPUState *cpu, void *data)
+{
+    SafeWorkItem *w = data;
+
+    start_exclusive();
+    w->func(cpu, w->data);
+    end_exclusive();
+    g_free(w);
+}
+
+void async_safe_run_on_cpu(CPUState *cpu, run_on_cpu_func func, void *data)
+{
+    SafeWorkItem *w = g_new(SafeWorkItem, 1);
+
+    w->func = func;
+    w->data = data;
+
+    async_run_on_cpu(cpu, async_safe_run_on_cpu_fn, w);
 }
 
 void process_queued_cpu_work(CPUState *cpu)
