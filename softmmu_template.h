@@ -165,9 +165,6 @@ WORD_TYPE helper_le_ld_name(CPUArchState *env, target_ulong addr,
     uintptr_t haddr;
     DATA_TYPE res;
 
-    /* Adjust the given return address.  */
-    retaddr -= GETPC_ADJ;
-
     if (addr & nbits(a_bits)) {
         cpu_unaligned_access(ENV_GET_CPU(env), addr, READ_ACCESS_TYPE,
                              mmu_idx, retaddr);
@@ -208,10 +205,8 @@ WORD_TYPE helper_le_ld_name(CPUArchState *env, target_ulong addr,
     do_unaligned_access:
         addr1 = addr & ~(DATA_SIZE - 1);
         addr2 = addr1 + DATA_SIZE;
-        /* Note the adjustment at the beginning of the function.
-           Undo that for the recursion.  */
-        res1 = helper_le_ld_name(env, addr1, oi, retaddr + GETPC_ADJ);
-        res2 = helper_le_ld_name(env, addr2, oi, retaddr + GETPC_ADJ);
+        res1 = helper_le_ld_name(env, addr1, oi, retaddr);
+        res2 = helper_le_ld_name(env, addr2, oi, retaddr);
         shift = (addr & (DATA_SIZE - 1)) * 8;
 
         /* Little-endian combine.  */
@@ -238,9 +233,6 @@ WORD_TYPE helper_be_ld_name(CPUArchState *env, target_ulong addr,
     unsigned a_bits = get_alignment_bits(get_memop(oi));
     uintptr_t haddr;
     DATA_TYPE res;
-
-    /* Adjust the given return address.  */
-    retaddr -= GETPC_ADJ;
 
     if (addr & nbits(a_bits)) {
         cpu_unaligned_access(ENV_GET_CPU(env), addr, READ_ACCESS_TYPE,
@@ -282,10 +274,8 @@ WORD_TYPE helper_be_ld_name(CPUArchState *env, target_ulong addr,
     do_unaligned_access:
         addr1 = addr & ~(DATA_SIZE - 1);
         addr2 = addr1 + DATA_SIZE;
-        /* Note the adjustment at the beginning of the function.
-           Undo that for the recursion.  */
-        res1 = helper_be_ld_name(env, addr1, oi, retaddr + GETPC_ADJ);
-        res2 = helper_be_ld_name(env, addr2, oi, retaddr + GETPC_ADJ);
+        res1 = helper_be_ld_name(env, addr1, oi, retaddr);
+        res2 = helper_be_ld_name(env, addr2, oi, retaddr);
         shift = (addr & (DATA_SIZE - 1)) * 8;
 
         /* Big-endian combine.  */
@@ -359,9 +349,6 @@ void helper_le_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
     unsigned a_bits = get_alignment_bits(get_memop(oi));
     uintptr_t haddr;
 
-    /* Adjust the given return address.  */
-    retaddr -= GETPC_ADJ;
-
     if (addr & nbits(a_bits)) {
         cpu_unaligned_access(ENV_GET_CPU(env), addr, MMU_DATA_STORE,
                              mmu_idx, retaddr);
@@ -416,10 +403,8 @@ void helper_le_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
         for (i = 0; i < DATA_SIZE; ++i) {
             /* Little-endian extract.  */
             uint8_t val8 = val >> (i * 8);
-            /* Note the adjustment at the beginning of the function.
-               Undo that for the recursion.  */
             glue(helper_ret_stb, MMUSUFFIX)(env, addr + i, val8,
-                                            oi, retaddr + GETPC_ADJ);
+                                            oi, retaddr);
         }
         return;
     }
@@ -441,9 +426,6 @@ void helper_be_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
     target_ulong tlb_addr = env->tlb_table[mmu_idx][index].addr_write;
     unsigned a_bits = get_alignment_bits(get_memop(oi));
     uintptr_t haddr;
-
-    /* Adjust the given return address.  */
-    retaddr -= GETPC_ADJ;
 
     if (addr & nbits(a_bits)) {
         cpu_unaligned_access(ENV_GET_CPU(env), addr, MMU_DATA_STORE,
@@ -499,10 +481,8 @@ void helper_be_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
         for (i = 0; i < DATA_SIZE; ++i) {
             /* Big-endian extract.  */
             uint8_t val8 = val >> (((DATA_SIZE - 1) * 8) - (i * 8));
-            /* Note the adjustment at the beginning of the function.
-               Undo that for the recursion.  */
             glue(helper_ret_stb, MMUSUFFIX)(env, addr + i, val8,
-                                            oi, retaddr + GETPC_ADJ);
+                                            oi, retaddr);
         }
         return;
     }
