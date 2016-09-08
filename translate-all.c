@@ -148,6 +148,7 @@ static void *l1_map[V_L1_SIZE];
 
 /* code generation context */
 TCGContext tcg_ctx;
+bool parallel_cpus = 1;
 
 /* translation block context */
 __thread int have_tb_lock;

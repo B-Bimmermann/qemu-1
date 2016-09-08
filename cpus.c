@@ -1279,6 +1279,12 @@ static void *qemu_tcg_rr_cpu_thread_fn(void *arg)
                 if (r == EXCP_DEBUG) {
                     cpu_handle_guest_debug(cpu);
                     break;
+                } else if (r == EXCP_ATOMIC) {
+                    /* ??? When we begin running cpus in parallel, we should
+                       stop all cpus, clear parallel_cpus, and interpret a
+                       single insn with cpu_exec_step.  In the meantime,
+                       we should never get here.  */
+                    abort();
                 }
             } else if (cpu->stop) {
                 if (cpu->unplug) {
@@ -1349,6 +1355,9 @@ static void *qemu_tcg_cpu_thread_fn(void *arg)
                  */
                 g_assert(cpu->halted);
                 break;
+            case EXCP_ATOMIC:
+                /* FIXME: we need to implement something */
+                abort();
             default:
                 /* Ignore everything else? */
                 break;
