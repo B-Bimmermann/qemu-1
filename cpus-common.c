@@ -18,6 +18,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/main-loop.h"
 #include "cpu.h"
 #include "sysemu/cpus.h"
 #include "exec/memory-internal.h"
@@ -269,9 +270,11 @@ static void async_safe_run_on_cpu_fn(CPUState *cpu, void *data)
 {
     SafeWorkItem *w = data;
 
+    qemu_mutex_unlock_iothread();
     start_exclusive();
     w->func(cpu, w->data);
     end_exclusive();
+    qemu_mutex_lock_iothread();
     g_free(w);
 }
 
