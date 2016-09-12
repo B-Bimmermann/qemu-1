@@ -567,6 +567,9 @@ void probe_write(CPUArchState *env, target_ulong addr, int mmu_idx,
                      mmu_idx, retaddr);                                 \
         }                                                               \
                                                                         \
+        if (unlikely(tlb_addr & TLB_NOTDIRTY)) {                        \
+            tlb_addr &= ~TLB_NOTDIRTY;                                  \
+        }                                                               \
         /* Notice an IO access.  */                                     \
         if (unlikely(tlb_addr & ~TARGET_PAGE_MASK)) {                   \
             /* There's really nothing that can be done to               \
