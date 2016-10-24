@@ -377,19 +377,19 @@ static void qht_bucket_reset__locked(struct qht_bucket *head)
     struct qht_bucket *b = head;
     int i;
 
-    seqlock_write_begin(&head->sequence);
     do {
+        seqlock_write_begin(&b->sequence);
         for (i = 0; i < QHT_BUCKET_ENTRIES; i++) {
             if (b->pointers[i] == NULL) {
-                goto done;
+                seqlock_write_end(&b->sequence);
+                return;
             }
             atomic_set(&b->hashes[i], 0);
             atomic_set(&b->pointers[i], NULL);
         }
+        seqlock_write_end(&b->sequence);
         b = b->next;
     } while (b);
- done:
-    seqlock_write_end(&head->sequence);
 }
 
 /* call with all bucket locks held */
@@ -449,6 +449,9 @@ void *qht_do_lookup(struct qht_bucket *head, qht_lookup_func_t func,
     int i;
 
     do {
+        void *q = NULL;
+        prefetch(b->next);
+        unsigned int version = seqlock_read_begin(&b->sequence);
         for (i = 0; i < QHT_BUCKET_ENTRIES; i++) {
             if (atomic_read(&b->hashes[i]) == hash) {
                 /* The pointer is dereferenced before seqlock_read_retry,
@@ -458,11 +461,16 @@ void *qht_do_lookup(struct qht_bucket *head, qht_lookup_func_t func,
                 void *p = atomic_rcu_read(&b->pointers[i]);
 
                 if (likely(p) && likely(func(p, userp))) {
-                    return p;
+                    q = p;
+                    break;
                 }
             }
         }
-        b = atomic_rcu_read(&b->next);
+        if (!q) {
+            b = atomic_rcu_read(&b->next);
+        } else if (!seqlock_read_retry(&b->sequence, version)) {
+            return q;
+        }
     } while (b);
 
     return NULL;
@@ -472,14 +480,7 @@ static __attribute__((noinline))
 void *qht_lookup__slowpath(struct qht_bucket *b, qht_lookup_func_t func,
                            const void *userp, uint32_t hash)
 {
-    unsigned int version;
-    void *ret;
-
-    do {
-        version = seqlock_read_begin(&b->sequence);
-        ret = qht_do_lookup(b, func, userp, hash);
-    } while (seqlock_read_retry(&b->sequence, version));
-    return ret;
+    return qht_do_lookup(b, func, userp, hash);
 }
 
 void *qht_lookup(struct qht *ht, qht_lookup_func_t func, const void *userp,
@@ -495,9 +496,11 @@ void *qht_lookup(struct qht *ht, qht_lookup_func_t func, const void *userp,
 
     version = seqlock_read_begin(&b->sequence);
     ret = qht_do_lookup(b, func, userp, hash);
+
     if (likely(!seqlock_read_retry(&b->sequence, version))) {
         return ret;
     }
+
     /*
      * Removing the do/while from the fastpath gives a 4% perf. increase when
      * running a 100%-lookup microbenchmark.
@@ -540,14 +543,14 @@ static bool qht_insert__locked(struct qht *ht, struct qht_map *map,
 
  found:
     /* found an empty key: acquire the seqlock and write */
-    seqlock_write_begin(&head->sequence);
+    seqlock_write_begin(&b->sequence);
     if (new) {
         atomic_rcu_set(&prev->next, b);
     }
     /* smp_wmb() implicit in seqlock_write_begin.  */
     atomic_set(&b->hashes[i], hash);
     atomic_set(&b->pointers[i], p);
-    seqlock_write_end(&head->sequence);
+    seqlock_write_end(&b->sequence);
     return true;
 }
 
@@ -668,9 +671,9 @@ bool qht_remove__locked(struct qht_map *map, struct qht_bucket *head,
             }
             if (q == p) {
                 qht_debug_assert(b->hashes[i] == hash);
-                seqlock_write_begin(&head->sequence);
+                seqlock_write_begin(&b->sequence);
                 qht_bucket_remove_entry(b, i);
-                seqlock_write_end(&head->sequence);
+                seqlock_write_end(&b->sequence);
                 return true;
             }
         }
