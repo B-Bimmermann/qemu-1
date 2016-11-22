@@ -659,7 +659,6 @@ int cpu_exec(CPUState *cpu)
 #endif /* buggy compiler */
 
             cpu->can_do_io = 1;
-            tb_lock_reset();
             if (qemu_mutex_iothread_locked()) {
                 qemu_mutex_unlock_iothread();
             }

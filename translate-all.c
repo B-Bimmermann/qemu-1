@@ -186,14 +186,6 @@ void tb_unlock(void)
     qemu_mutex_unlock(&tcg_ctx.tb_ctx.tb_lock);
 }
 
-void tb_lock_reset(void)
-{
-    if (have_tb_lock) {
-        qemu_mutex_unlock(&tcg_ctx.tb_ctx.tb_lock);
-        have_tb_lock = 0;
-    }
-}
-
 #ifdef DEBUG_LOCKING
 #define DEBUG_TB_LOCKS 1
 #else
@@ -1282,6 +1274,7 @@ TranslationBlock *tb_gen_code(CPUState *cpu,
  buffer_overflow:
         /* flush must be done */
         tb_flush(cpu);
+        tb_unlock();
         mmap_unlock();
         cpu_loop_exit(cpu);
     }
@@ -1588,6 +1581,7 @@ static bool tb_invalidate_phys_page(tb_page_addr_t addr, uintptr_t pc)
     TranslationBlock *tb;
     PageDesc *p;
     int n;
+    bool ret = false;
 #ifdef TARGET_HAS_PRECISE_SMC
     TranslationBlock *current_tb = NULL;
     CPUState *cpu = current_cpu;
@@ -1644,14 +1638,12 @@ static bool tb_invalidate_phys_page(tb_page_addr_t addr, uintptr_t pc)
            modifying the memory. It will ensure that it cannot modify
            itself */
         tb_gen_code(cpu, current_pc, current_cs_base, current_flags, 1);
-        /* tb_lock will be reset after cpu_loop_exit_noexc longjmps
-         * back into the cpu_exec loop. */
-        return true;
+        ret = true;
     }
 #endif
     tb_unlock();
 
-    return false;
+    return ret;
 }
 #endif
 
@@ -1802,15 +1794,13 @@ void cpu_io_recompile(CPUState *cpu, uintptr_t retaddr)
     /* FIXME: In theory this could raise an exception.  In practice
        we have already translated the block once so it's probably ok.  */
     tb_gen_code(cpu, pc, cs_base, flags, cflags);
+    tb_unlock();
 
     /* TODO: If env->pc != tb->pc (i.e. the faulting instruction was not
      * the first in the TB) then we end up generating a whole new TB and
      *  repeating the fault, which is horribly inefficient.
      *  Better would be to execute just this insn uncached, or generate a
      *  second new TB.
-     *
-     * cpu_loop_exit_noexc will longjmp back to cpu_exec where the
-     * tb_lock gets reset.
      */
     cpu_loop_exit_noexc(cpu);
 }

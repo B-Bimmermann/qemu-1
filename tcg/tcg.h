@@ -754,7 +754,6 @@ void tcg_pool_reset(TCGContext *s);
 
 void tb_lock(void);
 void tb_unlock(void);
-void tb_lock_reset(void);
 
 /* Called with tb_lock held.  */
 static inline void *tcg_malloc(int size)
