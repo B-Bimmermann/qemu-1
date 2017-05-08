@@ -4654,6 +4654,23 @@ if test "$fortify_source" != "no"; then
 fi
 
 ##########################################
+# check for sysmacros.h
+
+have_sysmacros=no
+cat > $TMPC << EOF
+#include <sys/sysmacros.h>
+int main(void) {
+    return makedev(0, 0);
+}
+EOF
+if compile_prog "" "" ; then
+    have_sysmacros=yes
+fi
+
+##########################################
+
+
+##########################################
 # check if struct fsxattr is available via linux/fs.h
 
 have_fsxattr=no
