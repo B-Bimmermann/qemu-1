@@ -209,7 +209,7 @@ void helper_cpuid(CPUX86State *env)
     }
 
     eax &= 0xfffffff0;
-    cpu_svm_check_intercept_param(env, SVM_EXIT_CPUID, 0);
+    cpu_svm_check_intercept_param(env, SVM_EXIT_CPUID, 0, GETPC());
 
     if (eax == 0x40000000 || eax == 0x80000000 || eax == 0) {
         cpu_x86_cpuid(env, (uint32_t)env->regs[R_EAX],
