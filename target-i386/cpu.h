@@ -1606,6 +1606,8 @@ void cpu_set_mxcsr(CPUX86State *env, uint32_t val);
 void cpu_set_fpuc(CPUX86State *env, uint16_t val);
 
 /* mem_helper.c */
+void helper_lock(void);
+void helper_unlock(void);
 void helper_lock_init(void);
 
 /* svm_helper.c */
