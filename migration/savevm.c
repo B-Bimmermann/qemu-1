@@ -2040,9 +2040,10 @@ void qsim_savevm_state_bh(void* opaque)
     state_file *sf = opaque;
     const char *filename = sf->file;
     g_free(sf);
-    QEMUFile *f;
     int ret;
     Error *local_err = NULL;
+    int fd;
+    QEMUFile *f;
 
     ret = global_state_store();
     if (ret) {
@@ -2052,7 +2053,13 @@ void qsim_savevm_state_bh(void* opaque)
     vm_stop(RUN_STATE_SAVE_VM);
     //global_state_store_running();
 
-    f = qemu_fopen(filename, "wb");
+    fd = qemu_open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (fd < 0) {
+        fprintf(stderr, "Could not open state file\n");
+        return;
+    }
+
+    f = (QEMUFile *) fdopen(fd, "wb");
     if (!f) {
         fprintf(stderr, "Could not open state file\n");
         return;
@@ -2072,11 +2079,18 @@ void qsim_savevm_state_bh(void* opaque)
 
 int qsim_loadvm_state(const char* filename)
 {
+    int fd;
     QEMUFile *f;
     int ret;
 
-    f = qemu_fopen(filename, "rb");
+    fd = qemu_open(filename, O_RDWR);
+    if (fd < 0) {
+        fprintf(stderr, "Could not open state file\n");
+        return -1;
+    }
+    f = (QEMUFile *) fdopen(fd, "wb");
     if (!f) {
+        close(fd);
         fprintf(stderr, "Could not open state file\n");
         return -1;
     }
