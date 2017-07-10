@@ -80,6 +80,9 @@ TCGArg *ilen_arg  = NULL;
 //#define MACRO_TEST   1
 extern int qsim_id;
 
+TCGv_i64 hret, a_;
+TCGv_i32 hret32;
+
 #define QSIM_STORE(name, ldname, bytes, d, a, i, mop)               \
 ({                                                                  \
     if (qsim_gen_callbacks) {                                       \
@@ -537,6 +540,7 @@ static inline void gen_op_add_reg_im(TCGMemOp size, int reg, int32_t val)
     QSIM_REG_READ(reg, (2 << size));
     tcg_gen_addi_tl(cpu_tmp0, cpu_regs[reg], val);
     gen_op_mov_reg_v(size, reg, cpu_tmp0);
+    qsim_set_inst_type(QSIM_INST_INTBASIC);
 }
 
 static inline void gen_op_add_reg_T0(TCGMemOp size, int reg)
@@ -2334,7 +2338,6 @@ static inline bool use_goto_tb(DisasContext *s, target_ulong pc)
 
 static inline void gen_goto_tb(DisasContext *s, int tb_num, target_ulong eip)
 {
-#if 0
     target_ulong pc = s->cs_base + eip;
 
     if (use_goto_tb(s, pc))  {
@@ -2343,8 +2346,6 @@ static inline void gen_goto_tb(DisasContext *s, int tb_num, target_ulong eip)
         gen_jmp_im(eip);
         tcg_gen_exit_tb((uintptr_t)s->tb + tb_num);
     } else {
-#endif
-    {
         /* jump to another page: currently not optimized */
         gen_jmp_im(eip);
         gen_eob(s);
@@ -4607,9 +4608,8 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
 
     qsim_set_inst_type(QSIM_INST_INTBASIC);
     if (qsim_trans_cb) qsim_trans_cb(qsim_id);
-    else qsim_memop_flag = 1;
 
-    s->pc = pc_start;
+    s->pc_start = s->pc = pc_start;
     prefixes = 0;
     s->override = -1;
     rex_w = -1;
@@ -4758,10 +4758,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
     s->prefix = prefixes;
     s->aflag = aflag;
     s->dflag = dflag;
-
-    /* lock generation */
-    if (prefixes & PREFIX_LOCK)
-        gen_helper_lock();
 
     /* now check op code */
  reswitch:
@@ -5150,11 +5146,11 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
                 break;
 #ifdef TARGET_X86_64
             case MO_64:
-                QSIM_REG_READ(QSIM_RAX, 8);
-                QSIM_REG_READ(QSIM_RDX, 8);
+                QSIM_REG_READ(QSIM_X86_RAX, 8);
+                QSIM_REG_READ(QSIM_X86_RDX, 8);
                 gen_helper_idivq_EAX(cpu_env, cpu_T0);
-                QSIM_REG_WRITE(QSIM_RAX, 8);
-                QSIM_REG_WRITE(QSIM_RDX, 8);
+                QSIM_REG_WRITE(QSIM_X86_RAX, 8);
+                QSIM_REG_WRITE(QSIM_X86_RDX, 8);
                 break;
 #endif
             }
@@ -8507,7 +8503,6 @@ static target_ulong disas_insn(CPUX86State *env, DisasContext *s,
     return s->pc;
  unknown_op:
     gen_unknown_opcode(env, s);
-    qsim_memop_flag = 0;
     return s->pc;
 }
 
