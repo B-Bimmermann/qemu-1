@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
- */ 
+ */
 
 #ifndef ARM_CPU_H
 #define ARM_CPU_H
@@ -95,7 +95,6 @@
 #define NB_MEM_ATTR 2
 #define MEM_ATTR_NS 0
 #define MEM_ATTR_SEC 1
-int interrupt(uint8_t vec);
 
 /* ARM-specific extra insn start words:
  * 1: Conditional execution bits
