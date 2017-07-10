@@ -52,6 +52,45 @@ extern int get_cpuidx(CPUX86State *env);
 
 extern CPUX86State* get_env(int cpu_idx);
 
+/* broken thread support */
+
+#if defined(CONFIG_USER_ONLY)
+QemuMutex global_cpu_lock;
+
+void helper_lock(void)
+{
+    qemu_mutex_lock(&global_cpu_lock);
+    atomic_flag = 1;
+    atomic_locked = 0;
+    // Suspend execution immediately if the atomic callback returns nonzero
+    if (qsim_gen_callbacks && qsim_atomic_cb && qsim_atomic_cb(qsim_id))
+        qsim_swap_ctx();
+}
+
+void helper_unlock(void)
+{
+    qemu_mutex_unlock(&global_cpu_lock);
+    atomic_flag = 0;
+}
+
+void helper_lock_init(void)
+{
+    qemu_mutex_init(&global_cpu_lock);
+}
+#else
+void helper_lock(void)
+{
+}
+
+void helper_unlock(void)
+{
+}
+
+void helper_lock_init(void)
+{
+}
+#endif
+
 void helper_cmpxchg8b_unlocked(CPUX86State *env, target_ulong a0)
 {
     uintptr_t ra = GETPC();
@@ -247,8 +286,6 @@ void tlb_fill(CPUState *cs, target_ulong addr, MMUAccessType access_type,
 #include "qsim-context.h"
 #include "qsim-x86-regs.h"
 
-extern void *qemu_get_ram_ptr(ram_addr_t addr);
-
 void helper_atomic_callback(void)
 {
     atomic_flag = !atomic_flag;
@@ -313,14 +350,16 @@ uint64_t get_reg(int cpu_idx, int r) {
         case QSIM_X86_R13:    return cpu->regs[13];
         case QSIM_X86_R14:    return cpu->regs[14];
         case QSIM_X86_R15:    return cpu->regs[15];
-        case QSIM_X86_FP0:    return cpu->fpregs[0].mmx.q;
-        case QSIM_X86_FP1:    return cpu->fpregs[1].mmx.q;
-        case QSIM_X86_FP2:    return cpu->fpregs[2].mmx.q;
-        case QSIM_X86_FP3:    return cpu->fpregs[3].mmx.q;
-        case QSIM_X86_FP4:    return cpu->fpregs[4].mmx.q;
-        case QSIM_X86_FP5:    return cpu->fpregs[5].mmx.q;
-        case QSIM_X86_FP6:    return cpu->fpregs[6].mmx.q;
-        case QSIM_X86_FP7:    return cpu->fpregs[7].mmx.q;
+
+        case QSIM_X86_FP0:    return cpu->fpregs[0].mmx.MMX_Q(0);
+        case QSIM_X86_FP1:    return cpu->fpregs[1].mmx.MMX_Q(0);
+        case QSIM_X86_FP2:    return cpu->fpregs[2].mmx.MMX_Q(0);
+        case QSIM_X86_FP3:    return cpu->fpregs[3].mmx.MMX_Q(0);
+        case QSIM_X86_FP4:    return cpu->fpregs[4].mmx.MMX_Q(0);
+        case QSIM_X86_FP5:    return cpu->fpregs[5].mmx.MMX_Q(0);
+        case QSIM_X86_FP6:    return cpu->fpregs[6].mmx.MMX_Q(0);
+        case QSIM_X86_FP7:    return cpu->fpregs[7].mmx.MMX_Q(0);
+
         case QSIM_X86_CS :    return cpu->segs[R_CS].base;;
         case QSIM_X86_SS :    return cpu->segs[R_SS].base;;
         case QSIM_X86_CR0:    return cpu->cr[0];
@@ -375,12 +414,12 @@ uint64_t get_reg(int cpu_idx, int r) {
         */
         default       :   return 0xbadbadbadbadbadbULL;
     }
-} 
+}
 
 /*
 static inline void qsim_update_seg(int seg) {
     CPUX86State *cpu = (CPUX86State *)first_cpu;
-    cpu_x86_load_seg_cache(cpu, seg, 
+    cpu_x86_load_seg_cache(cpu, seg,
             cpu->segs[seg].selector,
             cpu->segs[seg].base,
             cpu->segs[seg].limit,
@@ -409,14 +448,15 @@ void set_reg(int c, int r, uint64_t val) {
         case QSIM_X86_R13:    cpu->regs[13]             = val;      break;
         case QSIM_X86_R14:    cpu->regs[14]             = val;      break;
         case QSIM_X86_R15:    cpu->regs[15]             = val;      break;
-        case QSIM_X86_FP0:    cpu->fpregs[0].mmx.q      = val;      break;
-        case QSIM_X86_FP1:    cpu->fpregs[1].mmx.q      = val;      break;
-        case QSIM_X86_FP2:    cpu->fpregs[2].mmx.q      = val;      break;
-        case QSIM_X86_FP3:    cpu->fpregs[3].mmx.q      = val;      break;
-        case QSIM_X86_FP4:    cpu->fpregs[4].mmx.q      = val;      break;
-        case QSIM_X86_FP5:    cpu->fpregs[5].mmx.q      = val;      break;
-        case QSIM_X86_FP6:    cpu->fpregs[6].mmx.q      = val;      break;
-        case QSIM_X86_FP7:    cpu->fpregs[7].mmx.q      = val;      break;
+
+        case QSIM_X86_FP0:    cpu->fpregs[0].mmx.MMX_Q(0)      = val;      break;
+        case QSIM_X86_FP1:    cpu->fpregs[1].mmx.MMX_Q(0)      = val;      break;
+        case QSIM_X86_FP2:    cpu->fpregs[2].mmx.MMX_Q(0)      = val;      break;
+        case QSIM_X86_FP3:    cpu->fpregs[3].mmx.MMX_Q(0)      = val;      break;
+        case QSIM_X86_FP4:    cpu->fpregs[4].mmx.MMX_Q(0)      = val;      break;
+        case QSIM_X86_FP5:    cpu->fpregs[5].mmx.MMX_Q(0)      = val;      break;
+        case QSIM_X86_FP6:    cpu->fpregs[6].mmx.MMX_Q(0)      = val;      break;
+        case QSIM_X86_FP7:    cpu->fpregs[7].mmx.MMX_Q(0)      = val;      break;
         /*
         case QSIM_X86_FPSP:   cpu->fpstt                = val;      break;
         case QSIM_X86_ES :    cpu->segs[R_ES ].selector = val;      break;
@@ -511,8 +551,8 @@ static uint8_t *get_host_vaddr(CPUX86State *env, uint64_t vaddr, uint32_t length
 
     /* Skip device I/O
      */
-    if (mr->ram_addr != -1)
-        ptr = qemu_get_ram_ptr(mr->ram_addr + addr1);
+    if (memory_region_get_ram_addr(mr) != -1)
+        ptr = qemu_map_ram_ptr((RAMBlock *) memory_region_get_ram_addr(mr),addr1);
 
 done:
     return ptr;
@@ -623,25 +663,31 @@ void helper_load_callback_post(CPUX86State *env, uint64_t vaddr, uint32_t size, 
 }
 
 
-uint8_t mem_rd(CPUX86State *env, uint64_t paddr) {
+uint8_t mem_rd(uint64_t paddr)
+{
+    CPUX86State *env = get_env(0);
     CPUState *cs = CPU(x86_env_get_cpu(env));
     uint8_t b = ldub_phys(cs->as, paddr); // ldub_kernel(vaddr)*/0;
     return b;
 }
 
-void mem_wr(CPUX86State *env, uint64_t paddr, uint8_t value) {
+void mem_wr(uint64_t paddr, uint8_t value)
+{
+    CPUX86State *env = get_env(0);
     CPUState *cs = CPU(x86_env_get_cpu(env));
     stb_phys(cs->as, paddr, value);
 }
 
-uint8_t mem_rd_virt(CPUX86State *env, uint64_t vaddr) {
-    // This is known to fail on guest operating systems that support the NX bit.
-    char b = cpu_ldub_code(env, vaddr);
-    return b;
+uint8_t mem_rd_virt(int cpu_idx, uint64_t vaddr) {
+    CPUX86State *env = get_env(cpu_idx);
+    uint8_t *buf;
+    buf = get_host_vaddr(env, vaddr, 1);
+    return *buf;
 }
 
-void mem_wr_virt(CPUX86State *env, uint64_t vaddr, uint8_t value) {
-    // This is known to fail on guest operating systems that support the NX bit.
-    cpu_ldub_code(env, vaddr); // discard result but get the host address
-    (*(uint8_t *)qsim_host_addr) = value;
+void mem_wr_virt(int cpu_idx, uint64_t vaddr, uint8_t value) {
+    uint8_t *buf;
+    CPUX86State *env = get_env(cpu_idx);
+    buf = get_host_vaddr(env, vaddr, 1);
+    *buf = value;
 }
