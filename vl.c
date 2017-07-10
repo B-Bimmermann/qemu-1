@@ -248,7 +248,7 @@ static struct {
 int qsim_id;
 
 static void qsim_loop_main(void);
-static int  qsim_qemu_main(int argc, const char **argv, char **envp);
+static int  qsim_qemu_main(int argc, char **argv, char **envp);
 
 atomic_cb_t qsim_atomic_cb = NULL;
 magic_cb_t  qsim_magic_cb  = NULL;
@@ -2609,8 +2609,6 @@ static void monitor_parse(const char *optarg, const char *mode, bool pretty)
     qemu_opt_set(opts, "mode", mode, &error_abort);
     qemu_opt_set(opts, "chardev", label, &error_abort);
     qemu_opt_set_bool(opts, "pretty", pretty, &error_abort);
-    if (def)
-        qemu_opt_set(opts, "default", "on", &error_abort);
     monitor_device_index++;
 }
 
@@ -3155,7 +3153,7 @@ void qemu_init(const char* argv[])
         curr_tpid[i] = -1;
 
     // Call main with newly assembled argv.
-    qsim_qemu_main(argc, argv, (char**)environ);
+    qsim_qemu_main(argc,(char **) argv, (char**)environ);
 
     // Initialize contexts.
     getcontext(&qemu_context);
@@ -3171,7 +3169,7 @@ void qemu_init(const char* argv[])
     makecontext(&qemu_context, qsim_loop_main, 0);
 }
 
-int qsim_qemu_main(int argc, const char **argv, char **envp)
+int qsim_qemu_main(int argc, char **argv, char **envp)
 {
     int i;
     int snapshot, linux_boot;
