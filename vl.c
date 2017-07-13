@@ -4892,13 +4892,13 @@ int qsim_qemu_main(int argc, char **argv, char **envp)
     //iothread_stop_all();
     //bdrv_close_all();
     //pause_all_vcpus();
-    res_free();
+    //res_free();
 
     /* vhost-user must be cleaned up before chardevs.  */
-    net_cleanup();
-    audio_cleanup();
-    monitor_cleanup();
-    qemu_chr_cleanup();
+    //net_cleanup();
+    //audio_cleanup();
+    //monitor_cleanup();
+    //qemu_chr_cleanup();
 
     return 0;
 }
