@@ -1193,7 +1193,7 @@ void qemu_savevm_state_cleanup(void)
 
 static int qemu_savevm_state(QEMUFile *f, Error **errp)
 {
-    int ret;
+    int ret = 0;
     MigrationParams params = {
         .blk = 0,
         .shared = 0
@@ -1209,7 +1209,10 @@ static int qemu_savevm_state(QEMUFile *f, Error **errp)
 
     qemu_mutex_unlock_iothread();
     qemu_savevm_state_header(f);
+    if (qemu_file_get_error(f) != 0) fprintf(stderr, "Error while qemu_savevm_state_begin ERRORCODE: %i \n",ret);
     qemu_savevm_state_begin(f, &params);
+    if (qemu_file_get_error(f) != 0) fprintf(stderr, "Error while qemu_savevm_state_begin ERRORCODE: %i \n",ret);
+
     qemu_mutex_lock_iothread();
 
     while (qemu_file_get_error(f) == 0) {
@@ -1225,6 +1228,7 @@ static int qemu_savevm_state(QEMUFile *f, Error **errp)
     }
     qemu_savevm_state_cleanup();
     if (ret != 0) {
+        fprintf(stderr, "Error while writing VM state ERRORCODE: %i \n",ret);
         error_setg_errno(errp, -ret, "Error while writing VM state");
     }
 
@@ -2027,84 +2031,70 @@ void qsim_savevm_state(const char* filename)
     sf = (state_file *)g_malloc0(sizeof(state_file));
     sf->file = strdup(filename);
 
+    // qemu_bh_new = mutex qsim_savevm_state_bh
+    // create a new mutex object. secone parameter is the option
     bh = qemu_bh_new(qsim_savevm_state_bh, sf);
     qemu_bh_schedule(bh);
 
     return;
+
 }
 
 void qsim_savevm_state_bh(void* opaque)
 {
+    // get the filename from opaque
     state_file *sf = opaque;
     const char *filename = sf->file;
     g_free(sf);
-    int ret;
+
+    Error **errp;
     Error *local_err = NULL;
-    int fd;
+
     QEMUFile *f;
+    QIOChannelFile *ioc;
+    int saved_vm_running;
+    int ret;
+
+    /*
 
     ret = global_state_store();
     if (ret) {
-        printf("Error saving global state\n");
+        fprintf(stderr,"Error saving global state\n");
         return;
     }
+
+    */
+
+    saved_vm_running = runstate_is_running();
     vm_stop(RUN_STATE_SAVE_VM);
-    //global_state_store_running();
+    global_state_store_running();
 
-    fd = qemu_open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-    if (fd < 0) {
+    ioc = qio_channel_file_new_path(filename, O_WRONLY | O_CREAT, 0660, errp);
+    if (!ioc) {
         fprintf(stderr, "Could not open state file\n");
+        if (saved_vm_running) {
+            vm_start();
+        }
         return;
     }
-
-    f = (QEMUFile *) fdopen(fd, "wb");
-    if (!f) {
-        fprintf(stderr, "Could not open state file\n");
-        return;
-    }
+    qio_channel_set_name(QIO_CHANNEL(ioc), "migration-xen-save-state");
+    f = qemu_fopen_channel_output(QIO_CHANNEL(ioc));
     ret = qemu_savevm_state(f, &local_err);
     qemu_fclose(f);
     if (ret < 0) {
         fprintf(stderr, "Could not save state\n");
+        error_setg(errp, QERR_IO_ERROR);
         return;
     }
 
     // state saved, swap out to qsim
     qsim_swap(0);
-
     return;
 }
 
 int qsim_loadvm_state(const char* filename)
 {
-    int fd;
-    QEMUFile *f;
-    int ret;
-
-    fd = qemu_open(filename, O_RDWR);
-    if (fd < 0) {
-        fprintf(stderr, "Could not open state file\n");
-        return -1;
-    }
-    f = (QEMUFile *) fdopen(fd, "wb");
-    if (!f) {
-        close(fd);
-        fprintf(stderr, "Could not open state file\n");
-        return -1;
-    }
-
-    qemu_system_reset(VMRESET_SILENT);
-    migration_incoming_state_new(f);
-    ret = qemu_loadvm_state(f);
-    qemu_fclose(f);
-    migration_incoming_state_destroy();
-    if (ret < 0) {
-        fprintf(stderr, "Could not load state\n");
-        return ret;
-    }
-
-    vm_start();
-    return 0;
+    return load_vmstate(filename);
 }
 
 void hmp_savevm(Monitor *mon, const QDict *qdict)
