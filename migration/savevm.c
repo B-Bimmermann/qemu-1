@@ -2021,19 +2021,22 @@ extern void qsim_swap(void *opaque);
 
 typedef struct {
     const char* file;
+    sem_t * has_saved;
 } state_file;
 
-void qsim_savevm_state(const char* filename)
+void qsim_savevm_state(const char* filename, sem_t * has_saved)
 {
     state_file *sf;
     QEMUBH* bh;
 
     sf = (state_file *)g_malloc0(sizeof(state_file));
     sf->file = strdup(filename);
+    sf->has_saved = has_saved;
 
     // qemu_bh_new = mutex qsim_savevm_state_bh
     // create a new mutex object. secone parameter is the option
     bh = qemu_bh_new(qsim_savevm_state_bh, sf);
+
     qemu_bh_schedule(bh);
 
     return;
@@ -2045,6 +2048,7 @@ void qsim_savevm_state_bh(void* opaque)
     // get the filename from opaque
     state_file *sf = opaque;
     const char *filename = sf->file;
+    sem_t * has_saved = sf->has_saved;
     g_free(sf);
 
     Error **errp;
@@ -2077,6 +2081,7 @@ void qsim_savevm_state_bh(void* opaque)
         }
         return;
     }
+
     qio_channel_set_name(QIO_CHANNEL(ioc), "migration-xen-save-state");
     f = qemu_fopen_channel_output(QIO_CHANNEL(ioc));
     ret = qemu_savevm_state(f, &local_err);
@@ -2086,6 +2091,9 @@ void qsim_savevm_state_bh(void* opaque)
         error_setg(errp, QERR_IO_ERROR);
         return;
     }
+
+    // update the senaohor to end the fastforwarder
+    sem_post(has_saved);
 
     // state saved, swap out to qsim
     qsim_swap(0);
