@@ -128,8 +128,9 @@ void qemu_savevm_send_postcopy_ram_discard(QEMUFile *f, const char *name,
                                            uint64_t *start_list,
                                            uint64_t *length_list);
 
+#include <semaphore.h>
 int qemu_loadvm_state(QEMUFile *f);
-void qsim_savevm_state(const char *filename);
+void qsim_savevm_state(const char *filename,sem_t * has_saved);
 int qsim_loadvm_state(const char *filename);
 void qsim_savevm_state_bh(void *opaque);
 
