@@ -404,6 +404,7 @@ static memory_info init_memory(void *fdt, ram_addr_t ram_size, bool zynq_7000)
                                             "ram", &error_abort);
                     memory_region_add_subregion(container, region_start,
                                                 ram_region);
+                    vmstate_register_ram_global(ram_region);
                 }
             } while (mem_offset > 0 && ram_size > mem_created);
         } else {

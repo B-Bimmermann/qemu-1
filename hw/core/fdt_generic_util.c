@@ -924,6 +924,40 @@ static int fdt_init_qdev(char *node_path, FDTMachineInfo *fdti, char *compat)
     }
     fdt_init_set_opaque(fdti, node_path, dev);
 
+    // If we have a Memory Region
+    if (object_dynamic_cast(dev, TYPE_MEMORY_REGION)) {
+
+        // get all the propertys for this node
+        props = qemu_devtree_get_props(fdti->fdt, node_path);
+        for (prop = props; prop->name; prop++) {
+            const char *propname = trim_vendor(prop->name);
+            int len = prop->len;
+            void *val = prop->value;
+
+            // find the RAM property
+            if (strcmp(propname, "ram") ) {
+                continue;
+            }
+
+            // is it higher then 1 ?
+            if ( ((unsigned long long)get_int_be(val, len) >= 1) ) {
+                uint64_t region_size = 0;
+
+                // Get the size
+                region_size = qemu_fdt_getprop_cell(fdti->fdt, node_path,
+                                                   "reg", 2, 0, NULL);
+
+
+                //fprintf(stderr, "Size: 0x%" PRIx64 "\n", region_size);
+
+                // init the RAM
+                memory_region_init_ram(MEMORY_REGION(dev), NULL, node_path, region_size, &error_fatal);
+                vmstate_register_ram_global(MEMORY_REGION(dev));
+
+            }
+
+        }
+    }
     /* Set the default sync-quantum based on the global one. Node properties
      * in the dtb can later override this value.  */
     if (global_sync_quantum) {
