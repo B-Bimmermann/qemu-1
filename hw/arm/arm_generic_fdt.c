@@ -160,7 +160,7 @@ static int zynq7000_mdio_phy_create(char *node_path, FDTMachineInfo *fdti,
         fdt_init_yield(fdti);
     }
 
-    dev = qdev_create(NULL, "88e1116r");
+    dev = DEVICE(object_new("88e1116r"));
     qdev_set_parent_bus(dev, qdev_get_child_bus(Opaque, "mdio-bus"));
     reg = qemu_fdt_getprop_cell(fdti->fdt, node_path, "reg", 0, false,
                                 NULL);
@@ -333,7 +333,7 @@ static memory_info init_memory(void *fdt, ram_addr_t ram_size, bool zynq_7000)
         } while (mem_offset > 0);
 
         DB_PRINT(0, "Highest memory address from DTS is: " \
-                 "0x%" PRIx64 "/0x%" PRIx64 "\n", mem_created, ram_size);
+                 "0x%" PRIx64 "/0x" RAM_ADDR_FMT "\n", mem_created, ram_size);
 
         /* We now have the maximum amount of DDR that has been created. */
         if (mem_created == 0) {
@@ -404,6 +404,7 @@ static memory_info init_memory(void *fdt, ram_addr_t ram_size, bool zynq_7000)
                                             "ram", &error_abort);
                     memory_region_add_subregion(container, region_start,
                                                 ram_region);
+                    vmstate_register_ram_global(ram_region);
                 }
             } while (mem_offset > 0 && ram_size > mem_created);
         } else {
@@ -441,7 +442,8 @@ static void arm_generic_fdt_init(MachineState *machine)
         if (!QTEST_RUNNING) {
             /* Don't print this error if running qtest */
             fprintf(stderr, "The '" DEP_GENERAL_MACHINE_NAME "' machine has " \
-                    "been deprecated. Please use '" ZYNQ7000_MACHINE_NAME \
+                    "been deprecated and will be removed after the 2017.4 " \
+                    "release.Please use '" ZYNQ7000_MACHINE_NAME \
                     "' instead.\n");
         }
         zynq_7000 = true;

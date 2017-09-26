@@ -1209,10 +1209,7 @@ static int qemu_savevm_state(QEMUFile *f, Error **errp)
 
     qemu_mutex_unlock_iothread();
     qemu_savevm_state_header(f);
-    if (qemu_file_get_error(f) != 0) fprintf(stderr, "Error while qemu_savevm_state_begin ERRORCODE: %i \n",ret);
     qemu_savevm_state_begin(f, &params);
-    if (qemu_file_get_error(f) != 0) fprintf(stderr, "Error while qemu_savevm_state_begin ERRORCODE: %i \n",ret);
-
     qemu_mutex_lock_iothread();
 
     while (qemu_file_get_error(f) == 0) {
@@ -1228,7 +1225,6 @@ static int qemu_savevm_state(QEMUFile *f, Error **errp)
     }
     qemu_savevm_state_cleanup();
     if (ret != 0) {
-        fprintf(stderr, "Error while writing VM state ERRORCODE: %i \n",ret);
         error_setg_errno(errp, -ret, "Error while writing VM state");
     }
 
@@ -2059,7 +2055,9 @@ void qsim_savevm_state_bh(void* opaque)
     int saved_vm_running;
     int ret;
 
-    /*
+
+
+    saved_vm_running = runstate_is_running();
 
     ret = global_state_store();
     if (ret) {
@@ -2067,9 +2065,6 @@ void qsim_savevm_state_bh(void* opaque)
         return;
     }
 
-    */
-
-    saved_vm_running = runstate_is_running();
     vm_stop(RUN_STATE_SAVE_VM);
     global_state_store_running();
 
@@ -2084,6 +2079,10 @@ void qsim_savevm_state_bh(void* opaque)
 
     qio_channel_set_name(QIO_CHANNEL(ioc), "migration-xen-save-state");
     f = qemu_fopen_channel_output(QIO_CHANNEL(ioc));
+
+    fprintf(stdout,"Saving, this might take a few minutes\n");
+    fflush(stdout);
+
     ret = qemu_savevm_state(f, &local_err);
     qemu_fclose(f);
     if (ret < 0) {

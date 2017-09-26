@@ -167,7 +167,7 @@ static void fdt_init_all_irqs(FDTMachineInfo *fdti)
 FDTMachineInfo *fdt_generic_create_machine(void *fdt, qemu_irq *cpu_irq)
 {
     char node_path[DT_PATH_LENGTH];
-
+    QemuOpts *opts = qemu_opts_find(qemu_find_opts("smp-opts"), NULL);
     FDTMachineInfo *fdti = fdt_init_new_fdti(fdt);
 
     fdti->irq_base = cpu_irq;
@@ -188,7 +188,14 @@ FDTMachineInfo *fdt_generic_create_machine(void *fdt, qemu_irq *cpu_irq)
     }
 
     DB_PRINT(0, "FDT: Device tree scan complete\n");
-    FDTMachineInfo *ret = g_malloc0(sizeof(*ret));
+
+    /* Set the number of CPUs */
+    if (!qemu_opt_get_number(opts, "cpus", 0)) {
+        smp_cpus = fdt_generic_num_cpus;
+    }
+
+    DB_PRINT(0, "The value of smp_cpus is: %d\n", smp_cpus);
+
     return fdti;
 }
 
@@ -917,6 +924,40 @@ static int fdt_init_qdev(char *node_path, FDTMachineInfo *fdti, char *compat)
     }
     fdt_init_set_opaque(fdti, node_path, dev);
 
+    // If we have a Memory Region
+    if (object_dynamic_cast(dev, TYPE_MEMORY_REGION)) {
+
+        // get all the propertys for this node
+        props = qemu_devtree_get_props(fdti->fdt, node_path);
+        for (prop = props; prop->name; prop++) {
+            const char *propname = trim_vendor(prop->name);
+            int len = prop->len;
+            void *val = prop->value;
+
+            // find the RAM property
+            if (strcmp(propname, "ram") ) {
+                continue;
+            }
+
+            // is it higher then 1 ?
+            if ( ((unsigned long long)get_int_be(val, len) >= 1) ) {
+                uint64_t region_size = 0;
+
+                // Get the size
+                region_size = qemu_fdt_getprop_cell(fdti->fdt, node_path,
+                                                   "reg", 2, 0, NULL);
+
+
+                //fprintf(stderr, "Size: 0x%" PRIx64 "\n", region_size);
+
+                // init the RAM
+                memory_region_init_ram(MEMORY_REGION(dev), NULL, node_path, region_size, &error_fatal);
+                vmstate_register_ram_global(MEMORY_REGION(dev));
+
+            }
+
+        }
+    }
     /* Set the default sync-quantum based on the global one. Node properties
      * in the dtb can later override this value.  */
     if (global_sync_quantum) {

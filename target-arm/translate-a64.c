@@ -2099,6 +2099,7 @@ static void gen_store_exclusive(DisasContext *s, int rd, int rt, int rt2,
     gen_set_label(done_label);
     tcg_gen_movi_i64(cpu_exclusive_addr, -1);
 
+    gen_helper_sev(cpu_env);
     if (qsim_gen_callbacks) {
         tcg_temp_free_i32(tmp_size);
         tcg_temp_free_i32(tmp_type);

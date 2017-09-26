@@ -187,13 +187,13 @@ static void rp_idle(CPUState *cpu, run_on_cpu_data data)
     if (deadline == INT32_MAX) {
             return;
     }
-    rp_time_warp((void *) data.target_ptr, deadline);
+    rp_time_warp((void *)(uintptr_t) data.target_ptr, deadline);
 }
 
 void rp_leave_iothread(RemotePort *s)
 {
     if (use_icount && all_cpu_threads_idle() && time_warp_enable) {
-        async_run_on_cpu(first_cpu, rp_idle, RUN_ON_CPU_TARGET_PTR((vaddr) s));
+        async_run_on_cpu(first_cpu, rp_idle, RUN_ON_CPU_TARGET_PTR((uintptr_t) s));
     }
 }
 
@@ -682,6 +682,11 @@ static void rp_realize(DeviceState *dev, Error **errp)
         qdev_prop_set_chr(dev, "chardev", chr);
     }
 
+    /* Force RP sockets into blocking mode since our RP-thread will deal
+     * with the IO and bypassing QEMUs main-loop.
+     */
+    qemu_chr_fe_set_blocking(&s->chr, true);
+
 #ifdef _WIN32
     /* Create a socket connection between two sockets. We auto-bind
      * and read out the port selected by the kernel.
@@ -729,8 +734,10 @@ static void rp_realize(DeviceState *dev, Error **errp)
             slen = sizeof(saddr);
             fd = qemu_accept(listen_sk, (struct sockaddr *)&saddr, &slen);
             if (fd < 0 && errno != EINTR) {
+                close(listen_sk);
                 return;
             } else if (fd >= 0) {
+                close(listen_sk);
                 s->event.pipe.read = fd;
                 break;
             }
