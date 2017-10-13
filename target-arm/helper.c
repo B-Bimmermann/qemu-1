@@ -17,6 +17,8 @@
 #include "exec/semihost.h"
 #include "sysemu/kvm.h"
 #include "qsim-context.h"
+#include <stdio.h>
+#include <string.h>
 #define ARM_CPU_FREQ 1000000000 /* FIXME: 1 GHz, should be configurable */
 
 #ifndef CONFIG_USER_ONLY
@@ -374,6 +376,14 @@ bool write_list_to_cpustate(ARMCPU *cpu)
         if (ri->type & ARM_CP_NO_RAW) {
             continue;
         }
+
+        /* RPU Problems ... without the RPU everything seems to work normal ...
+        if (strcmp(ri->name,"CPACR") == 0){
+            write_raw_cp_reg(&cpu->env, ri, v);
+            continue;
+        }
+        */
+
         /* Write value and confirm it reads back as written
          * (to catch read-only registers and partially read-only
          * registers where the incoming migration value doesn't match)
@@ -1074,6 +1084,8 @@ void pmccntr_sync(CPUARMState *env)
     }
 }
 
+static int myyyyyi = 0;
+
 static void pmcr_write(CPUARMState *env, const ARMCPRegInfo *ri,
                        uint64_t value)
 {
@@ -1082,6 +1094,13 @@ static void pmcr_write(CPUARMState *env, const ARMCPRegInfo *ri,
     int cpu_id = cs->cpu_index;
 
     qsim_id = cs->cpu_index;
+    /*if (value != 0x1d1e1d1e) // Why we here stop ?
+    {*/
+        // for the breakpoint
+        //fprintf(stderr,"pmcr_write : value : %lx cpuid %i count : %i \n",value ,cpu_id, myyyyyi);
+        myyyyyi++;
+        fflush(stderr);
+    /*} */
     if (value == 0xaaaaaaaa) { // start
         qsim_tpid = extract64(env->cp15.contextidr_el[1], 0, 32);
 

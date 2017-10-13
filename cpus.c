@@ -1220,10 +1220,11 @@ static void *qemu_tcg_cpu_thread_fn(void *arg)
             cpu = first_cpu;
         }
 
+        //fprintf(stderr,"runmode is: %i \n", run_mode);
         if (!run_mode) {
 
             for (; cpu != NULL && !exit_request; cpu = CPU_NEXT(cpu)) {
-    
+
                 qemu_clock_enable(QEMU_CLOCK_VIRTUAL,
                                   (cpu->singlestep_enabled & SSTEP_NOTIMER) == 0);
 
@@ -1240,7 +1241,7 @@ static void *qemu_tcg_cpu_thread_fn(void *arg)
                     }
                     break;
                 }
-    
+
             } /* for cpu.. */
         } else {
             int64_t icount = qsim_icount;

@@ -41,13 +41,16 @@
 #include "qemu/timer.h"
 #include "qemu/log.h"
 
-//#define DEBUG_SD 1
+#include <stdio.h>
+
+
+#define DEBUG_SD 1
 
 #ifdef DEBUG_SD
 #define DPRINTF_RAW(fmt, ...) \
-do { qemu_log_mask(DEV_LOG_SD, fmt , ## __VA_ARGS__); } while (0)
+do { fprintf(stderr, fmt , ## __VA_ARGS__); } while (0)
 #define DPRINTF(fmt, ...) \
-do { qemu_log_mask(DEV_LOG_SD, "sd: " fmt , ## __VA_ARGS__); } while (0)
+do { fprintf(stderr, "sd: " fmt , ## __VA_ARGS__); } while (0)
 #else
 #define DPRINTF_RAW(fmt, ...) do {} while(0)
 #define DPRINTF(fmt, ...) do {} while(0)
@@ -591,7 +594,10 @@ static int sd_vmstate_pre_load(void *opaque)
      * needed), then the OCR must be set as powered up. If the OCR state
      * is included, this will be replaced by the state restore.
      */
-    sd_ocr_powerup(sd);
+    if (!(sd->ocr & OCR_POWER_UP))
+    {
+        sd_ocr_powerup(sd);
+    }
 
     return 0;
 }
@@ -1822,12 +1828,12 @@ send_response:
 #ifdef DEBUG_SD
     if (rsplen) {
         int i;
-        DPRINTF("Response:");
+        fprintf(stderr,"Response:");
         for (i = 0; i < rsplen; i++)
             DPRINTF_RAW(" %02x", response[i]);
         DPRINTF_RAW(" state %d\n", sd->state);
     } else {
-        DPRINTF("No response %d\n", sd->state);
+        fprintf(stderr,"No response %d\n", sd->state);
     }
 #endif
 

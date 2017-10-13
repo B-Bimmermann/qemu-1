@@ -75,6 +75,8 @@ static void *vmstate_base_addr(void *opaque, VMStateField *field, bool alloc)
     return base_addr;
 }
 
+static int myy_cpus= 0;
+
 int vmstate_load_state(QEMUFile *f, const VMStateDescription *vmsd,
                        void *opaque, int version_id)
 {
@@ -146,6 +148,11 @@ int vmstate_load_state(QEMUFile *f, const VMStateDescription *vmsd,
     ret = vmstate_subsection_load(f, vmsd, opaque);
     if (ret != 0) {
         return ret;
+    }
+    if (strcmp(vmsd->name,"cpu") == 0)
+    {
+        fprintf(stderr,"BIN HIERR BEI CPU:%i \n",myy_cpus);
+        myy_cpus++;
     }
     if (vmsd->post_load) {
         ret = vmsd->post_load(opaque, version_id);
