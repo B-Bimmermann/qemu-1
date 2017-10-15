@@ -591,7 +591,10 @@ static int sd_vmstate_pre_load(void *opaque)
      * needed), then the OCR must be set as powered up. If the OCR state
      * is included, this will be replaced by the state restore.
      */
-    sd_ocr_powerup(sd);
+    if (!(sd->ocr & OCR_POWER_UP))
+    {
+        sd_ocr_powerup(sd);
+    }
 
     return 0;
 }
