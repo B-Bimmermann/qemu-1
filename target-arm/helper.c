@@ -374,6 +374,15 @@ bool write_list_to_cpustate(ARMCPU *cpu)
         if (ri->type & ARM_CP_NO_RAW) {
             continue;
         }
+        /* RPU-CPU work around ... it seems that we write the correct
+         * value to the CPACR register, but we don't read it
+         * correct
+         */
+        if (strcmp(ri->name,"CPACR") == 0){
+            write_raw_cp_reg(&cpu->env, ri, v);
+            continue;
+        }
+
         /* Write value and confirm it reads back as written
          * (to catch read-only registers and partially read-only
          * registers where the incoming migration value doesn't match)
