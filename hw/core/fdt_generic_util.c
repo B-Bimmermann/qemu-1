@@ -950,10 +950,21 @@ static int fdt_init_qdev(char *node_path, FDTMachineInfo *fdti, char *compat)
 
                 //fprintf(stderr, "Size: 0x%" PRIx64 "\n", region_size);
 
+                // if the region_size is null, we should test a offset of 3.
+                if ( region_size == 0 )
+                    region_size = qemu_fdt_getprop_cell(fdti->fdt, node_path,
+                                                   "reg", 3, 0, NULL);
+
+                // if the region_size is now null, we can't build a qemu RAM
+                if ( region_size == 0){
+                    DB_PRINT_NP(0, "WARNING: Can't create RAM for Node: %s"
+                                   "Has reg a higher offset then 3 or is it 0?\n"
+                                , node_path);
+                }
+
                 // init the RAM
                 memory_region_init_ram(MEMORY_REGION(dev), NULL, node_path, region_size, &error_fatal);
                 vmstate_register_ram_global(MEMORY_REGION(dev));
-
             }
 
         }
