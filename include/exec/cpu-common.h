@@ -120,6 +120,8 @@ typedef int (RAMBlockIterFunc)(const char *block_name, void *host_addr,
     ram_addr_t offset, ram_addr_t length, void *opaque);
 
 int qemu_ram_foreach_block(RAMBlockIterFunc func, void *opaque);
+void qemu_ram_block_name_print(void);
+void set_qemu_ram_idstr_for_unamed_ram(const char * id_str_name);
 
 #endif
 

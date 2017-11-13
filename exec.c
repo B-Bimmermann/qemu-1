@@ -3939,3 +3939,39 @@ void cpu_halt_gpio(void *opaque, int irq, int level)
     cpu->halt_pin = level;
     cpu_halt_update(cpu);
 }
+
+void qemu_ram_block_name_print(void)
+{
+    RAMBlock *block;
+    int i = 0;
+
+    fprintf(stderr,"***********************************\n");
+    QLIST_FOREACH_RCU(block, &ram_list.blocks, next) {
+        fprintf(stderr,"Pos.: %3i Name: %-30s ",i,block->idstr);
+        fprintf(stderr, " used_length: 0x%"     PRIx64 " ", block->used_length);
+        fprintf(stderr, " page_size: 0x%"       PRIx64 " ", block->page_size);
+        fprintf(stderr, " max_length: 0x%"      PRIx64 " ", block->max_length);
+        fprintf(stderr, " offset: 0x%"          PRIx64 " ", block->offset);
+        fprintf(stderr, " fd: %i ", block->fd);
+        fprintf(stderr, " flags: %i ", block->flags);
+        fprintf(stderr, " max_length: 0x%" PRIx64 " ", block->max_length);
+
+
+        fprintf(stderr,"\n") ;
+        fflush(stderr);
+    }
+    fprintf(stderr,"***********************************\n");
+    fflush(stderr);
+}
+
+void set_qemu_ram_idstr_for_unamed_ram(const char * id_str_name)
+{
+    RAMBlock *block;
+
+    QLIST_FOREACH_RCU(block, &ram_list.blocks, next) {
+        if (!strcmp("", block->idstr)) {
+            // Maybe we should use strncpy
+            strcpy ( block->idstr, id_str_name );
+        }
+    }
+}
