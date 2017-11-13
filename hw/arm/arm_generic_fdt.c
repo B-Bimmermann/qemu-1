@@ -405,6 +405,14 @@ static memory_info init_memory(void *fdt, ram_addr_t ram_size, bool zynq_7000)
                     memory_region_add_subregion(container, region_start,
                                                 ram_region);
                     vmstate_register_ram_global(ram_region);
+                    // Later we should change vmstate_register_ram_global to:
+                    /*
+                    char idstr[256] = "";
+                    strcpy (idstr, region_name);
+                    strcat (idstr, "resized");
+                    set_qemu_ram_idstr_for_unamed_ram(idstr);
+                    */
+
                 }
             } while (mem_offset > 0 && ram_size > mem_created);
         } else {
