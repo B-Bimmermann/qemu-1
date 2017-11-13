@@ -4721,6 +4721,10 @@ int main(int argc, char **argv, char **envp)
         qemu_etrace_gpio_init();
     }
 
+    qemu_ram_block_name_print();
+    fflush(stderr);
+
+
     main_loop();
     replay_disable_events();
     iothread_stop_all();
