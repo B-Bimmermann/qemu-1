@@ -2053,21 +2053,17 @@ void qsim_savevm_state_bh(void* opaque)
 
     Error **errp;
     Error *local_err = NULL;
-    int fd;
     QEMUFile *f;
     QIOChannelFile *ioc;
     int saved_vm_running;
     int ret;
 
-    /*
-
+    
     ret = global_state_store();
     if (ret) {
         fprintf(stderr,"Error saving global state\n");
         return;
-    }
-
-    */
+    }    
 
     saved_vm_running = runstate_is_running();
     vm_stop(RUN_STATE_SAVE_VM);
