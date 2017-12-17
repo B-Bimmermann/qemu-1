@@ -400,8 +400,7 @@ static memory_info init_memory(void *fdt, ram_addr_t ram_size, bool zynq_7000)
 
                     memory_region_init_ram(ram_region, NULL, region_name,
                                            region_size, &error_fatal);
-                    object_property_set_int(OBJECT(ram_region), ram_prop,
-                                            "ram", &error_abort);
+                    //object_property_set_int(OBJECT(ram_region), ram_prop,"ram", &error_abort);
                     memory_region_add_subregion(container, region_start,
                                                 ram_region);
                     vmstate_register_ram_global(ram_region);
