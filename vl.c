@@ -2031,6 +2031,8 @@ static bool main_loop_should_exit(void)
 //  0: Total system run mode
 //  1: Per cpu run mode
 int run_mode = -1;
+extern void tb_lock(void);
+extern void tb_unlock(void);
 
 uint64_t run(uint64_t insts)
 {
@@ -2038,8 +2040,14 @@ uint64_t run(uint64_t insts)
 
     qsim_icount = insts;
 
+    rcu_read_lock();
+    tb_lock();
+
     swapcontext(&main_context, &qemu_context);
     checkcontext();
+
+    rcu_read_unlock();
+    tb_unlock();
 
     return insts - qsim_icount;
 }
@@ -2050,8 +2058,15 @@ uint64_t run_cpu(int cpu_id, uint64_t insts)
 
     qsim_icount = insts;
     qsim_id = cpu_id;
+
+    rcu_read_lock();
+    tb_lock();
+
     swapcontext(&main_context, &qemu_context);
     checkcontext();
+
+    rcu_read_unlock();
+    tb_unlock();
 
     return insts - qsim_icount;
 }
@@ -2072,14 +2087,25 @@ void qsim_swap_ctx(void)
         qsim_swap(NULL);
     }
     else {
+        rcu_read_lock();
+        tb_lock();
+
         bh = (qsim_swap_bh *)g_malloc0(sizeof(qsim_swap_bh));
         bh->swap_bh = qemu_bh_new(qsim_swap, bh);
         qemu_bh_schedule(bh->swap_bh);
+
+        rcu_read_unlock();
+        tb_unlock();
     }
 }
 
 void qsim_swap(void *opaque)
 {
+
+    rcu_read_lock();
+    tb_lock();
+
+
     if (opaque) {
         qsim_swap_bh *bh = (qsim_swap_bh *)opaque;
         qemu_bh_delete(bh->swap_bh);
@@ -2087,6 +2113,10 @@ void qsim_swap(void *opaque)
     }
     swapcontext(&qemu_context, &main_context);
     checkcontext();
+
+    rcu_read_unlock();
+    tb_unlock();
+
 }
 
 static void qsim_loop_main(void)
