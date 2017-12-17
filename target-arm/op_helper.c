@@ -1414,12 +1414,19 @@ uint32_t HELPER(ror_cc)(CPUARMState *env, uint32_t x, uint32_t i)
     }
 }
 
+#include "exec/ram_addr.h"
+#include "qemu/rcu_queue.h"
+
+
 static uint8_t *get_host_vaddr(CPUARMState *env, uint64_t vaddr, uint32_t length)
 {
     hwaddr phys_addr, addr1, l = length;
     target_ulong page;
     MemoryRegion *mr;
     uint8_t *ptr = NULL;
+
+    rcu_read_lock();
+    tb_lock();
 
     ARMCPU *cpu = arm_env_get_cpu(env);
     CPUState *cs = CPU(cpu);
@@ -1437,10 +1444,22 @@ static uint8_t *get_host_vaddr(CPUARMState *env, uint64_t vaddr, uint32_t length
 
     /* Skip device I/O
      */
-    if (memory_region_get_ram_addr(mr) != -1)
-        ptr = qemu_map_ram_ptr((RAMBlock *) memory_region_get_ram_addr(mr),addr1);
+    if (memory_region_get_ram_addr(mr) != RAM_ADDR_INVALID)
+    {
+
+        // map the physical to the ram to get the ram pointer
+        ptr = qemu_map_ram_ptr(mr->ram_block, addr1 );
+
+        // This semse to work to ... 
+        //ptr = qemu_map_ram_ptr(NULL, addr1 );
+
+	// Old Version
+        //ptr = qemu_map_ram_ptr((RAMBlock *) memory_region_get_ram_addr(mr),addr1);
+    }
 
 done:
+    rcu_read_unlock();
+    tb_unlock();
     return ptr;
 }
 
