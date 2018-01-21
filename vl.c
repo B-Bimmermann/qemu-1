@@ -2037,17 +2037,10 @@ extern void tb_unlock(void);
 uint64_t run(uint64_t insts)
 {
     run_mode = 0;
-
     qsim_icount = insts;
-
-    rcu_read_lock();
-    tb_lock();
 
     swapcontext(&main_context, &qemu_context);
     checkcontext();
-
-    rcu_read_unlock();
-    tb_unlock();
 
     return insts - qsim_icount;
 }
@@ -2059,14 +2052,8 @@ uint64_t run_cpu(int cpu_id, uint64_t insts)
     qsim_icount = insts;
     qsim_id = cpu_id;
 
-    rcu_read_lock();
-    tb_lock();
-
     swapcontext(&main_context, &qemu_context);
     checkcontext();
-
-    rcu_read_unlock();
-    tb_unlock();
 
     return insts - qsim_icount;
 }
@@ -2083,27 +2070,14 @@ typedef struct {
 void qsim_swap_ctx(void)
 {
     qsim_swap_bh *bh;
-    if (!run_mode) {
-        qsim_swap(NULL);
-    }
-    else {
-        rcu_read_lock();
-        tb_lock();
 
-        bh = (qsim_swap_bh *)g_malloc0(sizeof(qsim_swap_bh));
-        bh->swap_bh = qemu_bh_new(qsim_swap, bh);
-        qemu_bh_schedule(bh->swap_bh);
-
-        rcu_read_unlock();
-        tb_unlock();
-    }
+    bh = (qsim_swap_bh *)g_malloc0(sizeof(qsim_swap_bh));
+    bh->swap_bh = qemu_bh_new(qsim_swap, bh);
+    qemu_bh_schedule(bh->swap_bh);
 }
 
 void qsim_swap(void *opaque)
 {
-
-    rcu_read_lock();
-    tb_lock();
 
 
     if (opaque) {
@@ -2111,8 +2085,41 @@ void qsim_swap(void *opaque)
         qemu_bh_delete(bh->swap_bh);
         g_free(bh);
     }
+
+    rcu_read_lock();
+    tb_lock();
+
+    if (runstate_is_running()) {
+//        fprintf(stderr, " STOP QEMU in run_cpu \n" );
+//        fflush(stderr);
+        qmp_stop(&error_fatal);
+    }
+    else {
+        fprintf(stderr, "run_cpu afther check context : CONT QEMU ????? THIS SHOULD NEVER HAPPEN\n" );
+        fflush(stderr);
+    }
+
+    rcu_read_unlock();
+    tb_unlock();
+
+    rcu_read_lock();
+    tb_lock();
     swapcontext(&qemu_context, &main_context);
     checkcontext();
+    rcu_read_unlock();
+    tb_unlock();
+
+    rcu_read_lock();
+    tb_lock();
+    if (runstate_is_running()) {
+    // If it is not the first time we have a Problem
+        fprintf(stderr, "QEMU IS RUNNING in run_cpu THIS SHOULD NEVER HAPPEN\n" );
+        fflush(stderr);
+    } else {
+//        fprintf(stderr, "CONT QEMU in run_cpu \n" );
+//        fflush(stderr);
+        qmp_cont(&error_fatal);
+    }
 
     rcu_read_unlock();
     tb_unlock();
