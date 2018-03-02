@@ -2090,35 +2090,71 @@ void qsim_swap(void *opaque)
     tb_lock();
 
     if (runstate_is_running()) {
-//        fprintf(stderr, " STOP QEMU in run_cpu \n" );
-//        fflush(stderr);
-        qmp_stop(&error_fatal);
+// TESTS
+//        qemu_system_vmstop_request_prepare();
+//        RUN_STATE_WATCHDOG
+//        qemu_system_vmstop_request(RUN_STATE_PAUSED);
+//        qemu_mutex_lock(&vmstop_lock);
+
+// THIS SHOULD WORK
+        // We would just like to stop everthing without the CPUs. Please look at vm_stop();
+
+        // prepare it like vm_stop()
+        if (qemu_in_vcpu_thread()) {
+            qemu_system_vmstop_request_prepare();
+            qemu_system_vmstop_request(RUN_STATE_DEBUG);
+        }
+
+        // Disable the ticks like: vm_stop->do_vm_stop
+        cpu_disable_ticks();
+
+        // Disable the Clock like: vm_stop->do_vm_stop->pause_all_vcpus
+        qemu_clock_enable(QEMU_CLOCK_VIRTUAL, false);
+        qemu_clock_enable(QEMU_CLOCK_HOST, false);
+        qemu_clock_enable(QEMU_CLOCK_VIRTUAL_RT, false);
+        qemu_clock_enable(QEMU_CLOCK_REALTIME, false);
+
+
+        // Set a DEBUG RUNSTATE: vm_stop->do_vm_stop
+        runstate_set(RUN_STATE_DEBUG);
+        vm_state_notify(0, RUN_STATE_DEBUG);
+
+        // Wait that all is finished : vm_stop->do_vm_stop
+        bdrv_drain_all();
+        replay_disable_events();
+        bdrv_flush_all();
     }
     else {
-        fprintf(stderr, "run_cpu afther check context : CONT QEMU ????? THIS SHOULD NEVER HAPPEN\n" );
+        fprintf(stderr, " We have a not a running machine and try to switch to the simulation. This should never happend.\n" );
         fflush(stderr);
     }
 
-    rcu_read_unlock();
-    tb_unlock();
-
-    rcu_read_lock();
-    tb_lock();
     swapcontext(&qemu_context, &main_context);
     checkcontext();
-    rcu_read_unlock();
-    tb_unlock();
 
-    rcu_read_lock();
-    tb_lock();
     if (runstate_is_running()) {
     // If it is not the first time we have a Problem
-        fprintf(stderr, "QEMU IS RUNNING in run_cpu THIS SHOULD NEVER HAPPEN\n" );
+        fprintf(stderr, "We come from the simulation and have a running machine. This should never hallend\n" );
         fflush(stderr);
     } else {
+// TEST
 //        fprintf(stderr, "CONT QEMU in run_cpu \n" );
 //        fflush(stderr);
-        qmp_cont(&error_fatal);
+//        qemu_mutex_unlock(&vmstop_lock);
+
+// THIS SHOULD WORK
+        // This is like vm_start, but because the cpu still run, we don't can use vm_start();
+
+        // prepare it like vm_start()
+        replay_enable_events();
+        cpu_enable_ticks();
+        runstate_set(RUN_STATE_RUNNING);
+        vm_state_notify(1, RUN_STATE_RUNNING);
+        // prepare it like vm_start()->resume_all_vcpus()
+        qemu_clock_enable(QEMU_CLOCK_VIRTUAL, true);
+        qemu_clock_enable(QEMU_CLOCK_HOST, true);
+        qemu_clock_enable(QEMU_CLOCK_VIRTUAL_RT, true);
+        qemu_clock_enable(QEMU_CLOCK_REALTIME, true);
     }
 
     rcu_read_unlock();
